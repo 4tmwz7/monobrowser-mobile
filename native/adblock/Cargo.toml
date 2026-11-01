@@ -1,0 +1,27 @@
+[package]
+name = "monoadblock"
+version = "0.1.0"
+edition = "2024"
+description = "MonoBrowser Mobile adblock engine (brave/adblock-rust) exposed to Kotlin through JNI"
+publish = false
+
+[lib]
+# cdylib -> libmonoadblock.so for Android, rlib -> `cargo test` on the host.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Default features include `single-thread` (Rc-based, Engine: !Sync). WebView calls us from many
+# IO threads, so it is disabled to make Engine Send + Sync.
+adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
+jni = "0.22"
+log = "0.4"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "unwind" # JNI entry points catch panics; do not abort the browser
+strip = true

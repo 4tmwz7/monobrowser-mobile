@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the desktop icon (32x32 grid) scaled into the 66dp adaptive-icon safe zone: 108/32 grid -> x*2.0625 + 21. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- themed icon: the artwork silhouette (white square minus the dark square, plus the stroke ring) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M25.125,25.125L58.125,25.125L58.125,48.6375L48.6375,48.6375L48.6375,58.125L25.125,58.125Z" />
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="M48.6375,48.6375L84.1125,48.6375L84.1125,84.1125L48.6375,84.1125ZM51.1125,51.1125L51.1125,81.6375L81.6375,81.6375L81.6375,51.1125Z" />
+</vector>

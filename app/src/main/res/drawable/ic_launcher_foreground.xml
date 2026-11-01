@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the desktop icon (32x32 grid) scaled into the 66dp adaptive-icon safe zone: 108/32 grid -> x*2.0625 + 21. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- white square 2..18 -->
+    <path
+        android:fillColor="#f0efe9"
+        android:pathData="M25.125,25.125L58.125,25.125L58.125,58.125L25.125,58.125Z" />
+    <!-- dark square 14..30 on top with a 1.2 light stroke -->
+    <path
+        android:fillColor="#0a0a0a"
+        android:strokeColor="#f0efe9"
+        android:strokeWidth="2.475"
+        android:pathData="M49.875,49.875L82.875,49.875L82.875,82.875L49.875,82.875Z" />
+</vector>

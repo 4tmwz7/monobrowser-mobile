@@ -1,0 +1,378 @@
+package com.voluene.monobrowser.ui.settings
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.voluene.monobrowser.R
+import com.voluene.monobrowser.adblock.ListsState as State
+import com.voluene.monobrowser.browser.SitePermission
+import com.voluene.monobrowser.browser.SitePermissionStore
+import com.voluene.monobrowser.browser.TabManager
+import com.voluene.monobrowser.settings.AppLanguage
+import com.voluene.monobrowser.settings.AppSettings
+import com.voluene.monobrowser.settings.NewTabPage
+import com.voluene.monobrowser.settings.SearchEngine
+import com.voluene.monobrowser.settings.SettingsCodec
+import com.voluene.monobrowser.settings.StartupMode
+import com.voluene.monobrowser.settings.ThemeMode
+import com.voluene.monobrowser.settings.Themes
+import com.voluene.monobrowser.settings.LinkLongPress
+import com.voluene.monobrowser.settings.ToolbarPosition
+import com.voluene.monobrowser.ui.common.ChoiceDialog
+import com.voluene.monobrowser.ui.common.ConfirmDialog
+import com.voluene.monobrowser.ui.common.HairLine
+import com.voluene.monobrowser.ui.common.MonoButton
+import com.voluene.monobrowser.ui.common.MonoCheckbox
+import com.voluene.monobrowser.ui.common.MonoDialog
+import com.voluene.monobrowser.ui.common.MonoSwitch
+import com.voluene.monobrowser.ui.common.ScreenScaffold
+import com.voluene.monobrowser.ui.common.TextInputDialog
+import com.voluene.monobrowser.ui.theme.hexColor
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+private enum class Page { Main, Theme, Exceptions, Permissions, Licenses }
+
+private const val WEBSITE = "https://monobrowser.vercel.app"
+
+/** Settings in sections mirroring the desktop app (General, Appearance, Privacy & security, Adblock, About). */
+@Composable
+fun SettingsScreen(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: () -> Unit) {
+    var page by remember { mutableStateOf(Page.Main) }
+    BackHandler(enabled = page != Page.Main) { page = Page.Main }
+    val back = { page = Page.Main }
+    when (page) {
+        Page.Main -> MainPage(manager, onOpenUrl, onClose, open = { page = it })
+        Page.Theme -> ThemePage(manager, back)
+        Page.Exceptions -> ExceptionsPage(manager, back)
+        Page.Permissions -> PermissionsPage(manager, back)
+        Page.Licenses -> LicensesPage(back)
+    }
+}
+
+// ---- building blocks ----
+
+@Composable
+private fun Section(title: String) {
+    val scheme = MaterialTheme.colorScheme
+    Text(
+        title.uppercase(), color = scheme.onBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+        modifier = Modifier.fillMaxWidth().background(scheme.surfaceVariant).padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun SettingRow(title: String, subtitle: String? = null, enabled: Boolean = true, onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = scheme.onBackground.copy(alpha = if (enabled) 1f else 0.4f), fontSize = 16.sp)
+            if (subtitle != null) {
+                Text(subtitle, color = scheme.onBackground.copy(alpha = if (enabled) 0.65f else 0.35f), fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+        trailing()
+    }
+    HairLine()
+}
+
+@Composable
+private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) =
+    SettingRow(title, subtitle, onClick = { onChange(!checked) }) { MonoSwitch(checked, onChange) }
+
+@Composable
+private fun SubPage(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+    ScreenScaffold(title, onBack) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding()) { content() }
+    }
+}
+
+private fun formatTime(ms: Long): String =
+    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(ms))
+
+// ---- main page ----
+
+@Composable
+private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: () -> Unit, open: (Page) -> Unit) {
+    val context = LocalContext.current
+    val settings by manager.settings.collectAsState()
+    val lists by manager.adBlocker.listsStatus.collectAsState()
+    val exceptions by manager.adBlocker.exceptions.hostsFlow.collectAsState()
+    var dialog by remember { mutableStateOf<String?>(null) }
+    var clearDialog by remember { mutableStateOf(false) }
+    fun update(transform: (AppSettings) -> AppSettings) = manager.updateSettings(transform)
+
+    val engineNames = mapOf(
+        SearchEngine.GOOGLE to "Google", SearchEngine.DUCKDUCKGO to "DuckDuckGo", SearchEngine.CUSTOM to stringResource(R.string.settings_engine_custom),
+    )
+    val startupNames = mapOf(StartupMode.RESTORE to stringResource(R.string.settings_startup_restore), StartupMode.NEWTAB to stringResource(R.string.settings_startup_newtab))
+    val newTabNames = mapOf(NewTabPage.BLANK to stringResource(R.string.settings_newtab_blank), NewTabPage.HOMEPAGE to stringResource(R.string.settings_newtab_homepage))
+    val languageNames = mapOf(AppLanguage.SYSTEM to stringResource(R.string.settings_language_system), AppLanguage.PL to "Polski", AppLanguage.EN to "English")
+    val toolbarNames = mapOf(ToolbarPosition.BOTTOM to stringResource(R.string.settings_toolbar_bottom), ToolbarPosition.TOP to stringResource(R.string.settings_toolbar_top))
+    val linkNames = mapOf(LinkLongPress.GLANCE to stringResource(R.string.settings_link_glance), LinkLongPress.MENU to stringResource(R.string.settings_link_menu))
+    val modeNames = mapOf(ThemeMode.SYSTEM to stringResource(R.string.settings_mode_system), ThemeMode.LIGHT to stringResource(R.string.settings_mode_light), ThemeMode.DARK to stringResource(R.string.settings_mode_dark))
+    val themeName = Themes.find(settings.themeId)?.name ?: stringResource(R.string.settings_theme_default)
+
+    ScreenScaffold(stringResource(R.string.settings_title), onClose) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+            Section(stringResource(R.string.settings_section_general))
+            SettingRow(stringResource(R.string.settings_search_engine), engineNames[settings.searchEngine], onClick = { dialog = "engine" })
+            if (settings.searchEngine == SearchEngine.CUSTOM) {
+                SettingRow(stringResource(R.string.settings_custom_url), settings.customSearchUrl, onClick = { dialog = "customUrl" })
+            }
+            SettingRow(stringResource(R.string.settings_startup), startupNames[settings.startupMode], onClick = { dialog = "startup" })
+            SettingRow(stringResource(R.string.settings_newtab_page), newTabNames[settings.newTabPage], onClick = { dialog = "newtab" })
+            if (settings.newTabPage == NewTabPage.HOMEPAGE) {
+                SettingRow(stringResource(R.string.settings_homepage_url), settings.homepageUrl.ifEmpty { stringResource(R.string.settings_homepage_unset) }, onClick = { dialog = "homepage" })
+            }
+            SettingRow(stringResource(R.string.settings_language), languageNames[settings.language], onClick = { dialog = "language" })
+            SettingRow(stringResource(R.string.settings_toolbar), toolbarNames[settings.toolbarPosition], onClick = { dialog = "toolbar" })
+            SettingRow(stringResource(R.string.settings_link_longpress), linkNames[settings.linkLongPress], onClick = { dialog = "linkLongPress" })
+
+            Section(stringResource(R.string.settings_section_appearance))
+            SettingRow(stringResource(R.string.settings_theme), themeName, onClick = { open(Page.Theme) })
+            SettingRow(stringResource(R.string.settings_mode), modeNames[settings.themeMode], onClick = { dialog = "mode" })
+
+            Section(stringResource(R.string.settings_section_privacy))
+            SwitchRow(stringResource(R.string.settings_adblock), stringResource(R.string.settings_adblock_hint), settings.adblockEnabled) { v -> update { it.copy(adblockEnabled = v) } }
+            SettingRow(stringResource(R.string.settings_exceptions), stringResource(R.string.settings_exceptions_count, exceptions.size), onClick = { open(Page.Exceptions) })
+            SettingRow(stringResource(R.string.settings_permissions), stringResource(R.string.settings_permissions_hint), onClick = { open(Page.Permissions) })
+            SettingRow(stringResource(R.string.settings_clear_data), stringResource(R.string.settings_clear_data_hint), onClick = { clearDialog = true })
+
+            Section(stringResource(R.string.settings_section_adblock))
+            val stateLabel = when (lists.state) {
+                State.IDLE -> R.string.adblock_state_idle
+                State.LOADING -> R.string.adblock_state_loading
+                State.READY -> R.string.adblock_state_ready
+                State.ERROR -> R.string.adblock_state_error
+                State.WAITING_NETWORK -> R.string.adblock_state_waiting_network
+                State.WAITING_WIFI -> R.string.adblock_state_waiting_wifi
+            }
+            SettingRow(stringResource(R.string.adblock_status), stringResource(stateLabel))
+            SettingRow(
+                stringResource(R.string.adblock_lists),
+                stringResource(R.string.adblock_lists_count, lists.listsOnDisk, lists.listsTotal),
+            )
+            SettingRow(
+                stringResource(R.string.adblock_last_update),
+                if (lists.lastUpdateMs > 0) formatTime(lists.lastUpdateMs) else stringResource(R.string.adblock_never),
+            )
+            SettingRow(stringResource(R.string.adblock_update_now), stringResource(R.string.adblock_update_now_hint), enabled = !lists.updating, onClick = manager.adBlocker::updateListsNow)
+            SwitchRow(stringResource(R.string.adblock_wifi_only), stringResource(R.string.adblock_wifi_only_hint), settings.wifiOnlyListUpdates) { v -> update { it.copy(wifiOnlyListUpdates = v) } }
+
+            Section(stringResource(R.string.settings_section_about))
+            val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
+            SettingRow(stringResource(R.string.app_name), stringResource(R.string.about_version, version))
+            SettingRow(stringResource(R.string.about_licenses), stringResource(R.string.about_licenses_hint), onClick = { open(Page.Licenses) })
+            SettingRow(stringResource(R.string.about_website), WEBSITE.removePrefix("https://"), onClick = { onOpenUrl(WEBSITE) })
+        }
+    }
+
+    when (dialog) {
+        "engine" -> ChoiceDialog(stringResource(R.string.settings_search_engine), engineNames.toList(), settings.searchEngine, { choice ->
+            update { it.copy(searchEngine = choice) }
+            // Custom needs an address first.
+            if (choice == SearchEngine.CUSTOM) dialog = "customUrl"
+        }, { if (dialog == "engine") dialog = null })
+        "startup" -> ChoiceDialog(stringResource(R.string.settings_startup), startupNames.toList(), settings.startupMode, { c -> update { it.copy(startupMode = c) } }, { dialog = null })
+        "newtab" -> ChoiceDialog(stringResource(R.string.settings_newtab_page), newTabNames.toList(), settings.newTabPage, { c ->
+            update { it.copy(newTabPage = c) }
+            if (c == NewTabPage.HOMEPAGE && settings.homepageUrl.isEmpty()) dialog = "homepage"
+        }, { if (dialog == "newtab") dialog = null })
+        "language" -> ChoiceDialog(stringResource(R.string.settings_language), languageNames.toList(), settings.language, { c -> update { it.copy(language = c) } }, { dialog = null })
+        "toolbar" -> ChoiceDialog(stringResource(R.string.settings_toolbar), toolbarNames.toList(), settings.toolbarPosition, { c -> update { it.copy(toolbarPosition = c) } }, { dialog = null })
+        "linkLongPress" -> ChoiceDialog(stringResource(R.string.settings_link_longpress), linkNames.toList(), settings.linkLongPress, { c -> update { it.copy(linkLongPress = c) } }, { dialog = null })
+        "mode" -> ChoiceDialog(stringResource(R.string.settings_mode), modeNames.toList(), settings.themeMode, { c -> update { it.copy(themeMode = c) } }, { dialog = null })
+        "customUrl" -> TextInputDialog(
+            stringResource(R.string.settings_custom_url), settings.customSearchUrl.takeIf { settings.searchEngine == SearchEngine.CUSTOM }.orEmpty(),
+            stringResource(R.string.settings_custom_url_hint), stringResource(R.string.dialog_ok),
+            { v -> update { it.copy(customSearchUrl = v.trim(), searchEngine = SearchEngine.CUSTOM) } }, { dialog = null },
+            validate = SettingsCodec::isValidSearchUrl, keyboardType = KeyboardType.Uri,
+        )
+        "homepage" -> TextInputDialog(
+            stringResource(R.string.settings_homepage_url), settings.homepageUrl, stringResource(R.string.settings_homepage_hint),
+            stringResource(R.string.dialog_ok),
+            { v -> update { it.copy(homepageUrl = v.trim(), newTabPage = NewTabPage.HOMEPAGE) } }, { dialog = null },
+            validate = SettingsCodec::isValidHomepage, keyboardType = KeyboardType.Uri,
+        )
+    }
+    if (clearDialog) ClearDataDialog(manager) { clearDialog = false }
+}
+
+// ---- clear browsing data ----
+
+@Composable
+private fun ClearDataDialog(manager: TabManager, onDismiss: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    var history by remember { mutableStateOf(true) }
+    var cookies by remember { mutableStateOf(true) }
+    var cache by remember { mutableStateOf(true) }
+    var storage by remember { mutableStateOf(true) }
+    MonoDialog(onDismiss) {
+        Text(stringResource(R.string.settings_clear_data), color = scheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        MonoCheckbox(history, stringResource(R.string.clear_history), { history = it })
+        MonoCheckbox(cookies, stringResource(R.string.clear_cookies), { cookies = it })
+        MonoCheckbox(cache, stringResource(R.string.clear_cache), { cache = it })
+        MonoCheckbox(storage, stringResource(R.string.clear_storage), { storage = it })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MonoButton(stringResource(R.string.dialog_cancel), onDismiss, Modifier.weight(1f))
+            MonoButton(
+                stringResource(R.string.clear_confirm),
+                { manager.clearBrowsingData(history, cookies, cache, storage); onDismiss() },
+                Modifier.weight(1f), inverted = true, enabled = history || cookies || cache || storage,
+            )
+        }
+    }
+}
+
+// ---- theme page ----
+
+@Composable
+private fun ThemePage(manager: TabManager, onBack: () -> Unit) {
+    val settings by manager.settings.collectAsState()
+    val scheme = MaterialTheme.colorScheme
+    SubPage(stringResource(R.string.settings_theme), onBack) {
+        Text(stringResource(R.string.settings_theme_hint), color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        ThemeRow(stringResource(R.string.settings_theme_default), null, settings.themeId == Themes.DEFAULT_ID) {
+            manager.updateSettings { it.copy(themeId = Themes.DEFAULT_ID) }
+        }
+        Themes.PRESETS.forEach { preset ->
+            ThemeRow(preset.name, preset, settings.themeId == preset.id) { manager.updateSettings { it.copy(themeId = preset.id) } }
+        }
+    }
+}
+
+@Composable
+private fun ThemeRow(name: String, preset: com.voluene.monobrowser.settings.ThemePreset?, selected: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(18.dp).border(2.dp, scheme.outline, RectangleShape).padding(3.dp)) {
+            if (selected) Box(Modifier.fillMaxSize().background(scheme.onBackground))
+        }
+        Text(name, color = scheme.onBackground, fontSize = 16.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f).padding(start = 12.dp))
+        // Swatch: background / text / accent / danger as flat squares.
+        val colors = preset?.tokens?.let { listOf(it.bg, it.fg, it.accent, it.danger) } ?: listOf("#ffffff", "#000000", "#999999", "#333333")
+        Row(Modifier.border(1.dp, scheme.outline, RectangleShape)) {
+            colors.forEach { Box(Modifier.size(20.dp).background(hexColor(it))) }
+        }
+    }
+    HairLine()
+}
+
+// ---- adblock exceptions ----
+
+@Composable
+private fun ExceptionsPage(manager: TabManager, onBack: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val hosts by manager.adBlocker.exceptions.hostsFlow.collectAsState()
+    var adding by remember { mutableStateOf(false) }
+    SubPage(stringResource(R.string.settings_exceptions), onBack) {
+        Text(stringResource(R.string.settings_exceptions_hint), color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        MonoButton(stringResource(R.string.settings_exceptions_add), { adding = true }, Modifier.padding(horizontal = 16.dp).fillMaxWidth())
+        Box(Modifier.height(12.dp))
+        if (hosts.isEmpty()) {
+            Text(stringResource(R.string.settings_exceptions_empty), color = scheme.onBackground.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
+        }
+        hosts.forEach { host ->
+            SettingRow(host, onClick = null) {
+                MonoButton(stringResource(R.string.settings_remove), { manager.adBlocker.exceptions.remove(host) })
+            }
+        }
+    }
+    if (adding) {
+        TextInputDialog(
+            stringResource(R.string.settings_exceptions_add), "", stringResource(R.string.settings_exceptions_placeholder), stringResource(R.string.dialog_ok),
+            { manager.adBlocker.exceptions.add(it) }, { adding = false },
+            validate = { com.voluene.monobrowser.adblock.HostUtils.normalizeHost(it) != null }, keyboardType = KeyboardType.Uri,
+        )
+    }
+}
+
+// ---- site permissions ----
+
+@Composable
+private fun PermissionsPage(manager: TabManager, onBack: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    var version by remember { mutableStateOf(0) }
+    var confirmReset by remember { mutableStateOf(false) }
+    val decisions = remember(version) { manager.sitePermissionList }
+    SubPage(stringResource(R.string.settings_permissions), onBack) {
+        Text(stringResource(R.string.settings_permissions_page_hint), color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        MonoButton(stringResource(R.string.settings_permissions_reset_all), { confirmReset = true }, Modifier.padding(horizontal = 16.dp).fillMaxWidth(), enabled = decisions.isNotEmpty())
+        Box(Modifier.height(12.dp))
+        if (decisions.isEmpty()) {
+            Text(stringResource(R.string.settings_permissions_empty), color = scheme.onBackground.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
+        }
+        decisions.forEach { d: SitePermissionStore.Decision ->
+            val permission = stringResource(
+                when (d.permission) {
+                    SitePermission.CAMERA -> R.string.permission_camera
+                    SitePermission.MICROPHONE -> R.string.permission_microphone
+                    SitePermission.LOCATION -> R.string.permission_location
+                },
+            )
+            val verdict = stringResource(if (d.allowed) R.string.perm_allow else R.string.perm_deny)
+            SettingRow(SitePermissionStore.hostOf(d.origin), "$permission  ·  $verdict", onClick = null) {
+                MonoButton(stringResource(R.string.settings_permissions_reset), { manager.forgetSitePermission(d.origin, d.permission); version++ })
+            }
+        }
+    }
+    if (confirmReset) {
+        ConfirmDialog(
+            stringResource(R.string.settings_permissions_reset_all), stringResource(R.string.settings_permissions_reset_message),
+            stringResource(R.string.settings_permissions_reset), { manager.resetSitePermissions(); version++ }, { confirmReset = false },
+        )
+    }
+}
+
+// ---- licences ----
+
+@Composable
+private fun LicensesPage(onBack: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val text = remember { runCatching { context.resources.openRawResource(R.raw.third_party_notices).bufferedReader().use { it.readText() } }.getOrDefault("") }
+    SubPage(stringResource(R.string.about_licenses), onBack) {
+        Text(text, color = scheme.onBackground, fontSize = 13.sp, modifier = Modifier.padding(16.dp), overflow = TextOverflow.Clip)
+    }
+}
