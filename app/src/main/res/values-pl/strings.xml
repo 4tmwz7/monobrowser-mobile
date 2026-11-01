@@ -310,4 +310,47 @@
     <string name="menu_note_add_short">Dodaj do notatki</string>
     <string name="menu_reopen_short">Przywróć kartę</string>
     <string name="menu_new_private_short">Karta prywatna</string>
+
+    <!-- Aktualizacje -->
+    <string name="update_banner_available">Dostępna jest wersja MonoBrowser %1$s</string>
+    <string name="update_action_update">Aktualizuj</string>
+    <string name="update_action_notes">Co nowego</string>
+    <string name="update_notes_title">MonoBrowser %1$s</string>
+    <string name="update_notes_github">Zobacz na GitHubie</string>
+    <string name="update_notes_close">Zamknij</string>
+    <string name="update_notes_empty">Brak informacji o wersji</string>
+    <string name="update_notes_published">Opublikowano %1$s</string>
+    <string name="update_action_later">Później</string>
+    <string name="update_action_retry">Ponów</string>
+    <string name="update_action_cancel">Anuluj</string>
+    <string name="update_action_open_settings">Otwórz ustawienia</string>
+    <string name="update_permission_needed">Aby instalować aktualizacje, zezwól MonoBrowser na następnym ekranie („Zezwalaj z tego źródła”), a potem wróć.</string>
+    <string name="update_status_checking">Sprawdzanie aktualizacji...</string>
+    <string name="update_status_up_to_date">MonoBrowser jest aktualny</string>
+    <string name="update_status_idle">Jeszcze nie sprawdzano</string>
+    <string name="update_status_check_failed">Nie udało się sprawdzić aktualizacji</string>
+    <string name="update_status_downloading">Pobieranie MonoBrowser %1$s... %2$d%%</string>
+    <string name="update_status_downloading_unknown">Pobieranie MonoBrowser %1$s...</string>
+    <string name="update_status_verifying">Weryfikacja pobranego pliku...</string>
+    <string name="update_status_installing">Instalowanie... potwierdź w oknie systemu</string>
+    <string name="update_error_network">Pobieranie nie powiodło się. Sprawdź połączenie i spróbuj ponownie.</string>
+    <string name="update_error_bad_response">Serwer aktualizacji odpowiedział w nieoczekiwany sposób.</string>
+    <string name="update_error_checksum_unavailable">Wydanie nie ma pliku sumy kontrolnej; aktualizacji nie zainstalowano.</string>
+    <string name="update_error_untrusted_url">Adres aktualizacji nie jest zaufany; aktualizacji nie zainstalowano.</string>
+    <string name="update_error_checksum_mismatch">Pobrany plik jest uszkodzony (zła suma kontrolna); został odrzucony.</string>
+    <string name="update_error_package_rejected">Pobrany plik nie jest nowszym MonoBrowserem; został odrzucony.</string>
+    <string name="update_error_signature_mismatch">Aktualizacja jest podpisana innym kluczem niż zainstalowana aplikacja, więc Android nie może jej zaktualizować. Odinstaluj MonoBrowser raz (usuwa to jego dane) i zainstaluj nową wersję.</string>
+    <string name="update_error_storage">Za mało miejsca na aktualizację.</string>
+    <string name="update_error_install_cancelled">Instalację anulowano.</string>
+    <string name="update_error_install_failed">Instalacja nie powiodła się.</string>
+    <string name="update_downloads_title">MonoBrowser %1$s (aktualizacja)</string>
+    <string name="update_section">Aktualizacje</string>
+    <string name="update_auto">Sprawdzaj aktualizacje automatycznie</string>
+    <string name="update_auto_hint">Przy starcie i co 6 godzin. Nic nie jest pobierane bez Twojej zgody.</string>
+    <string name="update_current">Obecna wersja</string>
+    <string name="update_latest">Najnowsza wersja</string>
+    <string name="update_latest_unknown">Nieznana</string>
+    <string name="update_last_check">Ostatnie sprawdzenie</string>
+    <string name="update_check_now">Sprawdź aktualizacje</string>
+    <string name="update_install_version">Aktualizuj do %1$s</string>
 </resources>

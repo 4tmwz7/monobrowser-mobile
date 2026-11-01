@@ -1,5 +1,7 @@
 package com.voluene.monobrowser.ui.common
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,15 +53,15 @@ import com.voluene.monobrowser.R
 
 /** Rectangular text button: outlined, or filled when [inverted]. */
 @Composable
-fun MonoButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, inverted: Boolean = false, enabled: Boolean = true) {
+fun MonoButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, inverted: Boolean = false, enabled: Boolean = true, horizontalPadding: Dp = 14.dp) {
     val scheme = MaterialTheme.colorScheme
     val bg = if (inverted) scheme.onBackground else scheme.background
     val fg = if (inverted) scheme.background else scheme.onBackground
     Box(
         modifier.background(bg).border(1.dp, scheme.outline, RectangleShape)
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = horizontalPadding, vertical = 12.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(label, color = fg.copy(alpha = if (enabled) 1f else 0.4f), fontWeight = FontWeight.Medium, fontSize = 14.sp) }
+    ) { Text(label, color = fg.copy(alpha = if (enabled) 1f else 0.4f), fontWeight = FontWeight.Medium, fontSize = 14.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip) }
 }
 
 /** Dimmed scrim; a tap on it calls [onDismiss] (null = the scrim does not dismiss). */

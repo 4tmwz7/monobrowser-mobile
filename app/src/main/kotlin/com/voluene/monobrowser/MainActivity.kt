@@ -94,6 +94,11 @@ class MainActivity : ComponentActivity(), ActivityHost {
         handleIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        tabManager.updater.onAppResumed() // back from "Install unknown apps" settings -> continue the update
+    }
+
     override fun onStop() {
         super.onStop()
         tabManager.flush() // the process may be killed while in the background

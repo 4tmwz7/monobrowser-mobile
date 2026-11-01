@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,13 +38,16 @@ import com.voluene.monobrowser.download.DownloadRepository
 import com.voluene.monobrowser.download.DownloadStatus
 import com.voluene.monobrowser.ui.common.MonoButton
 import com.voluene.monobrowser.ui.common.ScreenScaffold
+import com.voluene.monobrowser.ui.update.UpdateDownloadEntry
+import com.voluene.monobrowser.update.UpdateManager
+import com.voluene.monobrowser.update.UpdatePhase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun DownloadsScreen(downloads: DownloadRepository, onClose: () -> Unit) {
+fun DownloadsScreen(downloads: DownloadRepository, updater: UpdateManager, onOpenUrl: (String) -> Unit, onClose: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -63,6 +67,10 @@ fun DownloadsScreen(downloads: DownloadRepository, onClose: () -> Unit) {
         refresh++
     }
 
+    val update by updater.status.collectAsState()
+    val updateListed = update.release != null && update.phase in setOf(
+        UpdatePhase.NEEDS_PERMISSION, UpdatePhase.DOWNLOADING, UpdatePhase.VERIFYING, UpdatePhase.INSTALLING, UpdatePhase.FAILED,
+    )
     ScreenScaffold(
         title = stringResource(R.string.downloads_title),
         onClose = onClose,
@@ -73,10 +81,11 @@ fun DownloadsScreen(downloads: DownloadRepository, onClose: () -> Unit) {
             )
         },
     ) {
-        if (items != null && items.orEmpty().isEmpty()) {
+        if (items != null && items.orEmpty().isEmpty() && !updateListed) {
             Text(stringResource(R.string.downloads_empty), color = scheme.onBackground.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding()) {
+            item(key = "update") { UpdateDownloadEntry(updater, onOpenUrl) }
             items(items.orEmpty(), key = { it.id }) { item ->
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(item.title, color = scheme.onBackground, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)

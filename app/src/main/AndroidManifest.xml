@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Self-update: installing the downloaded APK through PackageInstaller (the user allows it per app in system settings). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Public Downloads folder needs this only before Android 10. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
@@ -47,5 +49,7 @@
                 <data android:scheme="https" />
             </intent-filter>
         </activity>
+
+        <receiver android:name=".update.InstallReceiver" android:exported="false" />
     </application>
 </manifest>

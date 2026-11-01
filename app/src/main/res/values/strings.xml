@@ -310,4 +310,47 @@
     <string name="menu_note_add_short">Add to note</string>
     <string name="menu_reopen_short">Reopen tab</string>
     <string name="menu_new_private_short">Private tab</string>
+
+    <!-- Updates -->
+    <string name="update_banner_available">MonoBrowser %1$s is available</string>
+    <string name="update_action_update">Update</string>
+    <string name="update_action_notes">What\'s new</string>
+    <string name="update_notes_title">MonoBrowser %1$s</string>
+    <string name="update_notes_github">View on GitHub</string>
+    <string name="update_notes_close">Close</string>
+    <string name="update_notes_empty">No release notes</string>
+    <string name="update_notes_published">Published %1$s</string>
+    <string name="update_action_later">Later</string>
+    <string name="update_action_retry">Retry</string>
+    <string name="update_action_cancel">Cancel</string>
+    <string name="update_action_open_settings">Open settings</string>
+    <string name="update_permission_needed">To install updates, allow MonoBrowser in the next screen (\"Allow from this source\"), then come back.</string>
+    <string name="update_status_checking">Checking for updates...</string>
+    <string name="update_status_up_to_date">MonoBrowser is up to date</string>
+    <string name="update_status_idle">Not checked yet</string>
+    <string name="update_status_check_failed">Could not check for updates</string>
+    <string name="update_status_downloading">Downloading MonoBrowser %1$s... %2$d%%</string>
+    <string name="update_status_downloading_unknown">Downloading MonoBrowser %1$s...</string>
+    <string name="update_status_verifying">Verifying download...</string>
+    <string name="update_status_installing">Installing... confirm in the system dialog</string>
+    <string name="update_error_network">Download failed. Check your connection and try again.</string>
+    <string name="update_error_bad_response">The update server sent an unexpected answer.</string>
+    <string name="update_error_checksum_unavailable">The release has no checksum file; the update was not installed.</string>
+    <string name="update_error_untrusted_url">The update address is not trusted; the update was not installed.</string>
+    <string name="update_error_checksum_mismatch">The downloaded file is damaged (checksum mismatch); it was discarded.</string>
+    <string name="update_error_package_rejected">The downloaded file is not a newer MonoBrowser; it was discarded.</string>
+    <string name="update_error_signature_mismatch">The update is signed with a different key than the installed app, so Android cannot update it. Uninstall MonoBrowser once (this removes its data) and install the new version.</string>
+    <string name="update_error_storage">Not enough storage space for the update.</string>
+    <string name="update_error_install_cancelled">Installation was cancelled.</string>
+    <string name="update_error_install_failed">Installation failed.</string>
+    <string name="update_downloads_title">MonoBrowser %1$s (update)</string>
+    <string name="update_section">Updates</string>
+    <string name="update_auto">Check for updates automatically</string>
+    <string name="update_auto_hint">On start and every 6 hours. Nothing is downloaded without your approval.</string>
+    <string name="update_current">Current version</string>
+    <string name="update_latest">Latest version</string>
+    <string name="update_latest_unknown">Unknown</string>
+    <string name="update_last_check">Last checked</string>
+    <string name="update_check_now">Check for updates</string>
+    <string name="update_install_version">Update to %1$s</string>
 </resources>

@@ -94,6 +94,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     val history = HistoryDb(app)
     val downloads = DownloadRepository(app)
+    /** Process-wide self-updater (see [com.voluene.monobrowser.update.UpdateManager]). */
+    val updater = (app as com.voluene.monobrowser.MonoApp).updater
     private val sessionStore = SessionStore(app.filesDir)
 
     /** The Activity currently on screen (file chooser, runtime permissions); null while there is none. */

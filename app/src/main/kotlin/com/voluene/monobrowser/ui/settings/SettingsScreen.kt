@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.voluene.monobrowser.R
+import com.voluene.monobrowser.ui.update.UpdateNotesSheet
 import com.voluene.monobrowser.adblock.ListsState as State
 import com.voluene.monobrowser.browser.SitePermission
 import com.voluene.monobrowser.browser.SitePermissionStore
@@ -59,6 +60,8 @@ import com.voluene.monobrowser.ui.common.MonoSwitch
 import com.voluene.monobrowser.ui.common.ScreenScaffold
 import com.voluene.monobrowser.ui.common.TextInputDialog
 import com.voluene.monobrowser.ui.theme.hexColor
+import com.voluene.monobrowser.ui.update.updateStatusText
+import com.voluene.monobrowser.update.UpdatePhase
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -200,6 +203,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             Section(stringResource(R.string.settings_section_about))
             val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
             SettingRow(stringResource(R.string.app_name), stringResource(R.string.about_version, version))
+            if (manager.updater.enabled) UpdateRows(manager, settings.autoUpdateCheck, onOpenUrl, onAutoChange = { v -> update { it.copy(autoUpdateCheck = v) } })
             SettingRow(stringResource(R.string.about_licenses), stringResource(R.string.about_licenses_hint), onClick = { open(Page.Licenses) })
             SettingRow(stringResource(R.string.about_website), WEBSITE.removePrefix("https://"), onClick = { onOpenUrl(WEBSITE) })
         }
@@ -234,6 +238,37 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
         )
     }
     if (clearDialog) ClearDataDialog(manager) { clearDialog = false }
+}
+
+// ---- updates (Settings -> About) ----
+
+@Composable
+private fun UpdateRows(manager: TabManager, auto: Boolean, onOpenUrl: (String) -> Unit, onAutoChange: (Boolean) -> Unit) {
+    val updater = manager.updater
+    val status by updater.status.collectAsState()
+    val release = status.release
+    SwitchRow(stringResource(R.string.update_auto), stringResource(R.string.update_auto_hint), auto, onAutoChange)
+    SettingRow(stringResource(R.string.update_current), updater.currentVersionName)
+    SettingRow(
+        stringResource(R.string.update_latest),
+        release?.version ?: if (status.phase == UpdatePhase.UP_TO_DATE) updater.currentVersionName else stringResource(R.string.update_latest_unknown),
+    )
+    SettingRow(
+        stringResource(R.string.update_last_check),
+        if (status.lastCheckMs > 0) formatTime(status.lastCheckMs) else stringResource(R.string.adblock_never),
+    )
+    val busy = status.phase == UpdatePhase.CHECKING || status.phase.isBusy
+    SettingRow(stringResource(R.string.update_check_now), updateStatusText(status), enabled = !busy, onClick = updater::checkNow)
+    if (release != null && status.phase in setOf(UpdatePhase.AVAILABLE, UpdatePhase.FAILED, UpdatePhase.NEEDS_PERMISSION)) {
+        SettingRow(stringResource(R.string.update_install_version, release.version), onClick = updater::startUpdate) {
+            MonoButton(stringResource(R.string.update_action_update), updater::startUpdate, inverted = true)
+        }
+    }
+    if (release != null && status.phase in setOf(UpdatePhase.AVAILABLE, UpdatePhase.FAILED, UpdatePhase.NEEDS_PERMISSION)) {
+        var showNotes by remember { mutableStateOf(false) }
+        if (showNotes) UpdateNotesSheet(updater, release, onOpenUrl, onDismiss = { showNotes = false })
+        SettingRow(stringResource(R.string.update_action_notes), release.version, onClick = { showNotes = true })
+    }
 }
 
 // ---- clear browsing data ----

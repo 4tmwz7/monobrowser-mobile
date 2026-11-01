@@ -38,6 +38,7 @@ import com.voluene.monobrowser.browser.LinkMenuAction
 import com.voluene.monobrowser.browser.TabManager
 import com.voluene.monobrowser.data.WorkspaceOps
 import com.voluene.monobrowser.ui.notes.NotesScreen
+import com.voluene.monobrowser.ui.update.UpdateBanner
 import com.voluene.monobrowser.ui.tabs.WorkspaceEditorDialog
 import com.voluene.monobrowser.ui.tabs.WorkspaceUiState
 import com.voluene.monobrowser.data.BookmarkOps
@@ -85,6 +86,8 @@ fun BrowserScreen(manager: TabManager) {
     LaunchedEffect(scheme.background) { manager.setPageBackground(scheme.background.toArgb()) }
     // A blank new tab was opened or reused: go straight to typing.
     LaunchedEffect(manager) { manager.paletteRequests.collect { overlay = Overlay.Palette } }
+    // Update checks begin once the first frame is on screen (non-blocking, release builds only).
+    LaunchedEffect(manager) { manager.updater.start(manager.settings) }
 
     // System back, lowest to highest priority: page history, find bar, full-screen overlays.
     BackHandler(enabled = overlay == Overlay.None && find == null && tab.canGoBack) { manager.goBack(tab.id) }
@@ -265,6 +268,13 @@ fun BrowserScreen(manager: TabManager) {
                     onRefresh = { manager.reload(tab.id) },
                     lineAtBottom = !toolbarTop,
                 )
+                if (manager.updater.enabled) {
+                    UpdateBanner(
+                        updater = manager.updater,
+                        onOpenUrl = { manager.newTab(url = it) },
+                        modifier = Modifier.align(if (toolbarTop) Alignment.BottomCenter else Alignment.TopCenter).padding(8.dp).widthIn(max = 480.dp),
+                    )
+                }
                 val findState = find
                 if (findState != null) {
                     FindBar(
@@ -306,7 +316,12 @@ fun BrowserScreen(manager: TabManager) {
                 onOpen = { manager.navigate(tab.id, it); overlay = Overlay.None },
                 onClose = { overlay = Overlay.None },
             )
-            Overlay.Downloads -> DownloadsScreen(downloads = manager.downloads, onClose = { overlay = Overlay.None })
+            Overlay.Downloads -> DownloadsScreen(
+                downloads = manager.downloads,
+                updater = manager.updater,
+                onOpenUrl = { manager.newTab(url = it); overlay = Overlay.None },
+                onClose = { overlay = Overlay.None },
+            )
             Overlay.Bookmarks -> BookmarksScreen(
                 data = bookmarks,
                 host = { manager.host },

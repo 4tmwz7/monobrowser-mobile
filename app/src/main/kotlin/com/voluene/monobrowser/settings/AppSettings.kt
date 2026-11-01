@@ -53,6 +53,8 @@ data class AppSettings(
     val adblockEnabled: Boolean = true,
     val wifiOnlyListUpdates: Boolean = false,
     val onboardingDone: Boolean = false,
+    /** Release builds: look for a new version on start and every 6 h (never downloads without a tap). */
+    val autoUpdateCheck: Boolean = true,
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String
