@@ -705,6 +705,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         // Dialogs, file choosers and permission requests are routed through [TabUi] / [host] instead.
         // The context theme decides prefers-color-scheme (and whether algorithmic darkening may apply).
         val webView = MonoWebView(ContextThemeWrapper(getApplication(), if (webDark) R.style.Theme_MonoBrowser_WebDark else R.style.Theme_MonoBrowser_WebLight))
+        webView.keepPlayingInBackground = {
+            webMedia.state.value?.let { it.tabId == tab.id && it.playing } == true || _floating.value == tab.id
+        }
         // Profile must be set before any other WebView call.
         if (tab.isPrivate && privateProfilesSupported) {
             ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE)
@@ -1800,6 +1803,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
                 videoWidth = videoWidth, videoHeight = videoHeight,
             ),
         )
+        // Stopped while the app is in the background: the page may be hidden from Chromium now (saves battery).
+        if (!playing && !appVisible) (webViews[tabId] as? MonoWebView)?.applyRealVisibility()
         if (playing) {
             val app = getApplication<Application>()
             // Allowed while the app is in front (the usual case: the user pressed play); otherwise already running.

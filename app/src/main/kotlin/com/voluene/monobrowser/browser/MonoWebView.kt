@@ -13,6 +13,25 @@ class MonoWebView(context: Context) : WebView(context) {
     /** The current gesture ran into the top of the page (reset by the pull-to-refresh layout on each touch down). */
     var pulledPastTop = false
 
+    /**
+     * True while this tab plays media (or is the floating video): the app going to the background must not hide
+     * the page from Chromium, which would stop the playback itself (whatever the page thinks of its visibility).
+     */
+    var keepPlayingInBackground: () -> Boolean = { false }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        if (visibility != android.view.View.VISIBLE && keepPlayingInBackground()) {
+            super.onWindowVisibilityChanged(android.view.View.VISIBLE)
+            return
+        }
+        super.onWindowVisibilityChanged(visibility)
+    }
+
+    /** Playback stopped while the app is in the background: let Chromium know the page is hidden after all. */
+    fun applyRealVisibility() {
+        if (!keepPlayingInBackground()) super.onWindowVisibilityChanged(windowVisibility)
+    }
+
     override fun onOverScrolled(scrollX: Int, scrollY: Int, clampedX: Boolean, clampedY: Boolean) {
         super.onOverScrolled(scrollX, scrollY, clampedX, clampedY)
         if (clampedY && scrollY <= 0) pulledPastTop = true
