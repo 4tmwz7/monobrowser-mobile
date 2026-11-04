@@ -1,0 +1,5 @@
+# Baseline profile: ahead-of-time compile MonoBrowser's own code at install time (profileinstaller applies it),
+# so startup, the first menu / palette / tab grid and scrolling do not wait for the JIT. The app is small, so the
+# whole package is listed; library profiles (Compose, AndroidX) are merged in by the build.
+HSPLcom/voluene/monobrowser/**->**(**)**
+Lcom/voluene/monobrowser/**;
