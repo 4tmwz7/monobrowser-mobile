@@ -141,4 +141,44 @@ class PaletteEngineTest {
             assertEquals(com.voluene.monobrowser.util.UrlUtils.shortUrlLabel(url), PaletteEngine.hostFirst(url))
         }
     }
+
+    // --- Address bar: URL box by default, commands after a slash ---
+
+    private fun bar(q: String, history: List<PaletteLink> = emptyList()) =
+        PaletteEngine.addressBar(q, tabs, bookmarks, history, actions)
+
+    @Test fun addressBarIsAPlainUrlBoxWithoutTheSlash() {
+        val r = bar("e", history = listOf(PaletteLink("Hist e", "https://hist.example/")))
+        assertTrue(r.first() is PaletteResult.Go)
+        assertTrue(r.none { it is PaletteResult.Run || it is PaletteResult.OpenTab })
+        assertTrue(r.any { it is PaletteResult.History })
+        assertTrue(bar("").none { it is PaletteResult.Run || it is PaletteResult.OpenTab })
+    }
+
+    @Test fun slashListsAllCommands() {
+        val r = bar("/")
+        assertEquals(actions.map { it.id }, r.filterIsInstance<PaletteResult.Run>().map { it.action.id })
+        assertTrue(r.none { it is PaletteResult.Go })
+    }
+
+    @Test fun slashCommandsByLabelOrAliasWithoutSpaces() {
+        fun first(q: String) = (bar(q).first() as PaletteResult.Run).action.id
+        assertEquals(PaletteActionId.NEW_TAB, first("/newtab"))
+        assertEquals(PaletteActionId.NEW_TAB, first("/nowakarta"))
+        assertEquals(PaletteActionId.NEW_TAB, first("/new"))
+        assertEquals(PaletteActionId.OPEN_SETTINGS, first("/ustawienia"))
+        assertEquals(PaletteActionId.OPEN_HISTORY, first("/HISTORIA"))
+        assertEquals(PaletteActionId.OPEN_SETTINGS, first("  /opensett"))
+    }
+
+    @Test fun slashAlsoFindsOpenTabsAfterCommands() {
+        val r = bar("/wiki")
+        assertEquals(listOf(1L), r.filterIsInstance<PaletteResult.OpenTab>().map { it.tab.id })
+    }
+
+    @Test fun slugs() {
+        assertEquals("nowakarta", PaletteEngine.slug("Nowa karta"))
+        assertEquals("zamknijkarte", PaletteEngine.slug("Zamknij kartę"))
+        assertEquals("trybpulpitu", PaletteEngine.slug("Tryb pulpitu!"))
+    }
 }

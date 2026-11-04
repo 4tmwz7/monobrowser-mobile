@@ -99,7 +99,7 @@
     <string name="err_generic_hint">Podczas ładowania %1$s wystąpił błąd. Spróbuj ponownie.</string>
 
     <!-- Command palette -->
-    <string name="palette_hint">Szukaj, wpisz adres lub polecenie</string>
+    <string name="palette_hint">Szukaj lub wpisz adres  ·  / polecenia</string>
     <string name="palette_clear">Wyczyść</string>
     <string name="palette_section_go">Przejdź</string>
     <string name="palette_section_tabs">Otwarte karty</string>

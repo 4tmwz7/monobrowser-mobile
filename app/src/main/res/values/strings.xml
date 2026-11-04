@@ -99,7 +99,7 @@
     <string name="err_generic_hint">An error occurred while loading %1$s. Try again.</string>
 
     <!-- Command palette -->
-    <string name="palette_hint">Search, enter address or type a command</string>
+    <string name="palette_hint">Search or enter address  ·  / for commands</string>
     <string name="palette_clear">Clear</string>
     <string name="palette_section_go">Go</string>
     <string name="palette_section_tabs">Open tabs</string>

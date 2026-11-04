@@ -86,19 +86,21 @@ fun PaletteScreen(
 
     LaunchedEffect(Unit) { focus.requestFocus() }
     LaunchedEffect(query) {
-        if (query.isNotBlank()) delay(80) // debounce typing (an empty field asks for recent pages right away)
+        // Commands do not search history; an empty field asks for recent pages right away.
+        if (PaletteEngine.isCommand(query)) { history = emptyList(); return@LaunchedEffect }
+        if (query.isNotBlank()) delay(80) // debounce typing
         history = withContext(Dispatchers.IO) { historyLookup(query.trim()) }
     }
 
     var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(query) {
         val lookup = suggestionLookup
-        if (lookup == null || query.isBlank() || !PaletteEngine.isSearchInput(query)) { suggestions = emptyList(); return@LaunchedEffect }
+        if (lookup == null || query.isBlank() || PaletteEngine.isCommand(query) || !PaletteEngine.isSearchInput(query)) { suggestions = emptyList(); return@LaunchedEffect }
         delay(150) // debounce: only ask once typing pauses
         suggestions = lookup(query.trim())
     }
     val results = remember(query, history, tabs, bookmarks, actions, suggestions) {
-        PaletteEngine.search(query, tabs, bookmarks, history, actions, suggestions)
+        PaletteEngine.addressBar(query, tabs, bookmarks, history, actions, suggestions)
     }
     // "Refine": the suggestion goes into the field so it can be extended.
     val refine: (String) -> Unit = { text -> field = TextFieldValue("$text ", TextRange(text.length + 1)) }
@@ -146,10 +148,18 @@ fun PaletteScreen(
                     is PaletteRow.Item -> ResultRow(row.result, first = row.index == 0, onRefine = refine) { onResult(row.result) }
                 }
             }
+            // The edge between the results and the page (after the last row, whichever way the list grows).
+            if (rows.isNotEmpty()) item(key = "edge") { Box(Modifier.fillMaxWidth().height(1.dp).background(scheme.outline)) }
         }
     }
 
-    Column(Modifier.fillMaxSize().background(scheme.background).then(if (toolbarTop) Modifier.statusBarsPadding() else Modifier.statusBarsPadding().navigationBarsPadding().imePadding())) {
+    // Only the field and the results are opaque: the page stays visible around them, and a tap on it closes.
+    val outside = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Column(
+        Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.18f))
+            .clickable(interactionSource = outside, indication = null, onClick = onDismiss)
+            .then(if (toolbarTop) Modifier.statusBarsPadding() else Modifier.statusBarsPadding().navigationBarsPadding().imePadding()),
+    ) {
         if (toolbarTop) {
             input()
             Box(Modifier.fillMaxWidth().height(1.dp).background(scheme.outline))
@@ -211,10 +221,11 @@ private fun ResultRow(result: PaletteResult, first: Boolean, onRefine: (String) 
             ).joinToString("  ·  ")
         is PaletteResult.Bookmark -> result.link.title.ifBlank { UrlUtils.shortUrlLabel(result.link.url) } to UrlUtils.shortUrlLabel(result.link.url)
         is PaletteResult.History -> result.link.title.ifBlank { UrlUtils.shortUrlLabel(result.link.url) } to UrlUtils.shortUrlLabel(result.link.url)
-        is PaletteResult.Run -> result.action.label to result.action.hint
+        is PaletteResult.Run -> result.action.label to
+            listOf(result.action.hint, "/" + PaletteEngine.slug(result.action.label)).filter { it.isNotBlank() }.joinToString("  \u00b7  ")
     }
     Row(
-        Modifier.fillMaxWidth().then(if (first) Modifier.background(scheme.surfaceVariant) else Modifier).clickable(onClick = onClick)
+        Modifier.fillMaxWidth().background(if (first) scheme.surfaceVariant else scheme.background).clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

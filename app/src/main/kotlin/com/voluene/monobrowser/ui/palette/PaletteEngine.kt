@@ -174,6 +174,62 @@ object PaletteEngine {
         return actions.filter { isSubsequence(needle, fold("${it.label} ${it.keywords}").replace(SPACES, "")) }.take(limit)
     }
 
+    /** Commands start with a slash: `/newtab`, `/nowakarta`, `/ustawienia` ... */
+    const val COMMAND_PREFIX = '/'
+    const val MAX_COMMANDS = 40
+
+    fun isCommand(query: String): Boolean = query.trimStart().startsWith(COMMAND_PREFIX)
+
+    /** `Nowa karta` -> `nowakarta`: how a command is typed after the slash. */
+    fun slug(label: String): String = fold(label).filter { it in 'a'..'z' || it in '0'..'9' }
+
+    /**
+     * What the address bar shows: an ordinary URL box (go / search, engine suggestions, matching bookmarks and
+     * history) unless the text starts with [COMMAND_PREFIX]; then commands (and open tabs) instead.
+     */
+    fun addressBar(
+        query: String,
+        tabs: List<PaletteTab>,
+        bookmarks: List<PaletteLink>,
+        history: List<PaletteLink>,
+        actions: List<PaletteAction>,
+        suggestions: List<String> = emptyList(),
+    ): List<PaletteResult> =
+        if (isCommand(query)) commands(query, actions, tabs)
+        else search(query, emptyList(), bookmarks, history, emptyList(), suggestions)
+
+    /**
+     * Commands for `/text`: label typed without spaces first (`/nowak` -> Nowa karta), then keyword aliases
+     * (`/newtab`), then all words anywhere, then a subsequence; open tabs that match follow. A bare `/` lists all.
+     */
+    fun commands(query: String, actions: List<PaletteAction>, tabs: List<PaletteTab> = emptyList()): List<PaletteResult> {
+        val rest = query.trimStart().drop(1)
+        val needle = slug(rest)
+        val words = words(rest)
+        val out = ArrayList<PaletteResult>()
+        if (needle.isEmpty()) {
+            actions.take(MAX_COMMANDS).forEach { out.add(PaletteResult.Run(it)) }
+            return out
+        }
+        val hits = ArrayList<Long>()
+        actions.forEachIndexed { i, action ->
+            val label = slug(action.label)
+            val keywords = fold(action.keywords)
+            val score = when {
+                label.startsWith(needle) -> 0
+                keywords.replace(SPACES, "").contains(needle) || label.contains(needle) -> 1
+                matchesAll(words, "${fold(action.label)} $keywords") -> 2
+                isSubsequence(needle, label + keywords.replace(SPACES, "")) -> 3
+                else -> return@forEachIndexed
+            }
+            hits.add(score.toLong() shl 32 or i.toLong())
+        }
+        hits.sort()
+        hits.take(MAX_COMMANDS).forEach { out.add(PaletteResult.Run(actions[(it and 0xffffffffL).toInt()])) }
+        filterLinks(tabs, words, { it.title }, { it.url }, MAX_TABS, { it.workspace }).forEach { out.add(PaletteResult.OpenTab(it)) }
+        return out
+    }
+
     fun isSearchInput(input: String): Boolean {
         val trimmed = input.trim()
         return !(UrlUtils.isHttpUrl(trimmed) || UrlUtils.isAboutBlankUrl(trimmed) || UrlUtils.looksLikeHost(trimmed) ||

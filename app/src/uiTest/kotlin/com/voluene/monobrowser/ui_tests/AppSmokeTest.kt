@@ -90,7 +90,7 @@ class AppSmokeTest {
         }
         compose.setContent { MonoTheme { BrowserScreen(manager) } }
         save("widget_cold_start")
-        compose.onNodeWithText("Search, enter address or type a command").assertExists()
+        compose.onNodeWithText(androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().getString(com.voluene.monobrowser.R.string.palette_hint)).assertExists()
     }
 
     @Test fun settingsSearch() {
