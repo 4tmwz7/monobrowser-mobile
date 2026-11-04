@@ -471,4 +471,6 @@
     <string name="tip_pull_text">Reload.</string>
     <string name="widget_label">MonoBrowser search</string>
     <string name="widget_description">Search or enter an address, or open a private tab, from the home screen</string>
+    <string name="settings_strip_tracking">Remove tracking from links</string>
+    <string name="settings_strip_tracking_hint">utm_*, fbclid, gclid and similar are dropped from links you open, copy and share</string>
 </resources>

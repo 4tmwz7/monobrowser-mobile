@@ -92,6 +92,8 @@ data class AppSettings(
     val webDarkMode: WebDarkMode = WebDarkMode.AUTO,
     /** Start page tiles the user pinned (shown before the most visited sites). */
     val pinnedSites: List<PinnedSite> = emptyList(),
+    /** Remove utm_*, fbclid, gclid and similar trackers from links you open, copy and share. */
+    val stripTracking: Boolean = true,
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String

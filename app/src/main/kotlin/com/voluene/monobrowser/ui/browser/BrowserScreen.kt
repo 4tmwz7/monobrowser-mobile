@@ -178,7 +178,7 @@ fun BrowserScreen(manager: TabManager) {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
         context.startActivity(Intent.createChooser(send, context.getString(R.string.menu_share)))
     }
-    fun shareLink() = shareText(tab.url)
+    fun shareLink() = shareText(manager.cleanUrl(tab.url))
 
     fun toast(res: Int, vararg args: Any) = Toast.makeText(context, context.getString(res, *args), Toast.LENGTH_SHORT).show()
 

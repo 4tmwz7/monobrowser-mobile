@@ -471,4 +471,6 @@
     <string name="tip_pull_text">Odśwież.</string>
     <string name="widget_label">Wyszukiwanie MonoBrowser</string>
     <string name="widget_description">Szukaj lub wpisz adres albo otwórz kartę prywatną z ekranu głównego</string>
+    <string name="settings_strip_tracking">Usuwaj śledzenie z linków</string>
+    <string name="settings_strip_tracking_hint">utm_*, fbclid, gclid i podobne znikają z linków, które otwierasz, kopiujesz i udostępniasz</string>
 </resources>

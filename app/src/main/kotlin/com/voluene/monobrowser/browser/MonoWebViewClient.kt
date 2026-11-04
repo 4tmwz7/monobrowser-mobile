@@ -50,7 +50,11 @@ class MonoWebViewClient(
             return true
         }
         val action = ExternalLinks.classify(url)
-        if (action == LinkAction.Load) return false
+        if (action == LinkAction.Load) {
+            // Only taps on links (not redirects, not form posts): drop click trackers from the address.
+            return request.isForMainFrame && request.hasGesture() && !request.isRedirect && request.method.equals("GET", true) &&
+                ui.cleanNavigation(tabId, url)
+        }
         // Frames inside a page never get to start apps.
         if (!request.isForMainFrame) return true
         return ui.openExternalLink(tabId, action, request.hasGesture() || request.isRedirect)

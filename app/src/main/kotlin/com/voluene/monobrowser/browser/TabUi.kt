@@ -37,6 +37,9 @@ interface TabUi {
      */
     fun createWindow(tabId: Long, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean
 
+    /** A tapped main-frame link: true when it was replaced by a cleaned URL (tracking parameters removed). */
+    fun cleanNavigation(tabId: Long, url: String): Boolean
+
     /** `window.close()` from a page. */
     fun closeWindow(tabId: Long)
 }

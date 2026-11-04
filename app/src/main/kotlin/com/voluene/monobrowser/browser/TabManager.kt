@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import com.voluene.monobrowser.adblock.Adblock
 import com.voluene.monobrowser.util.UrlUtils
 import com.voluene.monobrowser.util.TranslateUrl
+import com.voluene.monobrowser.util.TrackingParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -532,15 +533,18 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     // --- Navigation ---
 
     /** Input from the address bar (URL or search query). */
+    /** [url] without tracking parameters when the setting is on. */
+    fun cleanUrl(url: String): String = if (settingsFile.value.stripTracking) TrackingParams.clean(url) else url
+
     fun navigate(id: Long, input: String) {
-        val url = UrlUtils.resolveInput(input, settingsFile.value.searchTemplate) ?: return
+        val url = UrlUtils.resolveInput(input, settingsFile.value.searchTemplate)?.let(::cleanUrl) ?: return
         errorUrls.remove(id)
         ensureLive(id, restore = false)?.loadUrl(url)
     }
 
     /** Shared or selected text from another app: a URL is opened, anything else is searched, in a new tab. */
     fun openExternalInput(input: String) {
-        val url = UrlUtils.resolveInput(input, settingsFile.value.searchTemplate) ?: return
+        val url = UrlUtils.resolveInput(input, settingsFile.value.searchTemplate)?.let(::cleanUrl) ?: return
         if (UrlUtils.isHttpUrl(url)) newTab(url = url)
     }
 
@@ -1146,6 +1150,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     /** Copies [text] and confirms with a toast. */
     fun copyToClipboard(text: String) {
+        val text = cleanUrl(text)
         val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
         clipboard?.setPrimaryClip(ClipData.newPlainText(null, text))
         // Android 13+ confirms copies itself.
@@ -1476,6 +1481,14 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     override fun chooseFiles(callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean {
         val activityHost = host ?: return false
         activityHost.pickFiles(params) { callback.onReceiveValue(it) }
+        return true
+    }
+
+    /** A link tapped in a page: when it carries tracking parameters, load the clean URL instead. */
+    override fun cleanNavigation(tabId: Long, url: String): Boolean {
+        val clean = cleanUrl(url)
+        if (clean === url) return false
+        webViews[tabId]?.loadUrl(clean) ?: return false
         return true
     }
 
