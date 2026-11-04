@@ -505,4 +505,8 @@
     <string name="sync_error_access">No access to the sync file any more. Stop syncing and choose it again.</string>
     <string name="sync_error_format">This file is not a MonoBrowser sync file.</string>
     <string name="sync_error_io">Could not read or write the sync file (offline?). It will be tried again.</string>
+    <string name="menu_pip">Video window</string>
+    <string name="pip_unavailable">Floating video windows are not available on this device</string>
+    <string name="settings_pip">Video in a floating window</string>
+    <string name="settings_pip_hint">Leaving the app while a video plays in the current tab keeps it playing in a small window. Videos also keep playing in the background with the screen off.</string>
 </resources>

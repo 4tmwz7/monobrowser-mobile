@@ -38,10 +38,13 @@
             android:textSize="16sp" />
     </LinearLayout>
 
-    <View
+    <!-- Separator. Launchers only inflate whitelisted (@RemoteView) classes: a plain <View> makes the whole
+         widget fail with "Can't add widget", so this is an ImageView. -->
+    <ImageView
         android:layout_width="1dp"
         android:layout_height="24dp"
-        android:background="@color/widget_hint" />
+        android:background="@color/widget_hint"
+        android:importantForAccessibility="no" />
 
     <ImageView
         android:id="@+id/widget_private"

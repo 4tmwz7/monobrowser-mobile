@@ -90,17 +90,16 @@ fun SettingsScreen(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: ()
     val back = { page = Page.Main }
     // The main page stays underneath, so a predictive back gesture on a sub-page reveals it.
     MainPage(manager, onOpenUrl, onClose, open = { page = it })
-    if (page != Page.Main) androidx.compose.runtime.key(page) {
-        PredictiveBackContainer(onBack = back) {
-            when (page) {
-                Page.Main -> Unit
-                Page.Theme -> ThemePage(manager, back)
-                Page.Exceptions -> ExceptionsPage(manager, back)
-                Page.Permissions -> PermissionsPage(manager, back)
-                Page.Licenses -> LicensesPage(back)
-                Page.Tips -> SubPage(stringResource(R.string.tips_title), back) {
-                    com.voluene.monobrowser.ui.onboarding.GestureTips(Modifier.padding(20.dp))
-                }
+    // Sub-pages slide in from the side and back out (also after a predictive back gesture).
+    com.voluene.monobrowser.ui.common.PushedPage(page.takeIf { it != Page.Main }, onBack = back) { shown ->
+        when (shown) {
+            Page.Main -> Unit
+            Page.Theme -> ThemePage(manager, back)
+            Page.Exceptions -> ExceptionsPage(manager, back)
+            Page.Permissions -> PermissionsPage(manager, back)
+            Page.Licenses -> LicensesPage(back)
+            Page.Tips -> SubPage(stringResource(R.string.tips_title), back) {
+                com.voluene.monobrowser.ui.onboarding.GestureTips(Modifier.padding(20.dp))
             }
         }
     }
@@ -231,6 +230,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             SwitchRow(stringResource(R.string.settings_adblock), stringResource(R.string.settings_adblock_hint), settings.adblockEnabled) { v -> update { it.copy(adblockEnabled = v) } }
             SettingRow(stringResource(R.string.settings_exceptions), stringResource(R.string.settings_exceptions_count, exceptions.size), onClick = { open(Page.Exceptions) })
             SettingRow(stringResource(R.string.settings_permissions), stringResource(R.string.settings_permissions_hint), onClick = { open(Page.Permissions) })
+            SwitchRow(stringResource(R.string.settings_pip), stringResource(R.string.settings_pip_hint), settings.autoPictureInPicture) { v -> update { it.copy(autoPictureInPicture = v) } }
             SwitchRow(stringResource(R.string.settings_strip_tracking), stringResource(R.string.settings_strip_tracking_hint), settings.stripTracking) { v -> update { it.copy(stripTracking = v) } }
             SettingRow(stringResource(R.string.settings_clear_data), stringResource(R.string.settings_clear_data_hint), onClick = { clearDialog = true })
 

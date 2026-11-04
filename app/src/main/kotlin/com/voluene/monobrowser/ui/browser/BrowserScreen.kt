@@ -67,7 +67,11 @@ import com.voluene.monobrowser.reader.ReaderArticle
 import com.voluene.monobrowser.ui.reader.ReaderScreen
 import com.voluene.monobrowser.ui.start.StartPage
 import com.voluene.monobrowser.search.SearchSuggestions
-import com.voluene.monobrowser.ui.common.BackStyle
+import com.voluene.monobrowser.ui.common.LocalModalScope
+import com.voluene.monobrowser.ui.common.Motion
+import com.voluene.monobrowser.ui.common.Presence
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
@@ -89,18 +93,36 @@ import kotlinx.coroutines.launch
 private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes, Reader, ReadingList }
 
 /**
- * Overlay transitions: pages fade in while growing from 96 %, the menu sheet slides up from the bottom; leaving
- * reverses it. Switching straight from one overlay to another (menu -> settings) crossfades.
+ * Overlay transitions (Material 3 emphasized easing, springs where something lands):
+ * - the tab grid zooms out of the tab counter and, when a tab is picked, the grid zooms into the page;
+ * - the palette rises from the address bar, the reader slides up;
+ * - other pages fade in while growing from 92 %;
+ * - the menu is a sheet: its scrim and panel animate themselves (see [ModalScope]), so it is not faded as a whole.
+ * Everything animates the graphics layer only (no relayout per frame), so it runs at the display's refresh rate.
  */
-private fun AnimatedContentTransitionScope<Overlay>.overlayTransition(from: Overlay, to: Overlay): ContentTransform {
-    val pageIn = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.96f)
-    val pageOut = fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.96f)
-    val sheetIn = slideInVertically(tween(220)) { it / 2 } + fadeIn(tween(160))
-    val sheetOut = slideOutVertically(tween(180)) { it / 2 } + fadeOut(tween(180))
-    val enter = when (to) { Overlay.None -> EnterTransition.None; Overlay.Menu -> sheetIn; else -> pageIn }
-    val exit = when (from) { Overlay.None -> ExitTransition.None; Overlay.Menu -> sheetOut; else -> pageOut }
-    // The overlay that is coming in is drawn on top.
-    return (enter togetherWith exit).apply { targetContentZIndex = if (to == Overlay.None) 0f else 1f }
+private fun AnimatedContentTransitionScope<Overlay>.overlayTransition(from: Overlay, to: Overlay, barTop: Boolean, intoTab: Boolean): ContentTransform {
+    val counter = TransformOrigin(0.93f, if (barTop) 0.04f else 0.96f)
+    val enter = when (to) {
+        Overlay.None, Overlay.Menu -> EnterTransition.None
+        Overlay.Tabs -> fadeIn(Motion.enterTween(200)) + scaleIn(Motion.scaleSpring, initialScale = 0.82f, transformOrigin = counter)
+        Overlay.Palette -> fadeIn(Motion.enterTween(Motion.FADE_IN_MS)) +
+            slideInVertically(Motion.slideSpring) { h -> if (barTop) -h / 14 else h / 14 }
+        Overlay.Reader -> fadeIn(Motion.enterTween(Motion.FADE_IN_MS)) + slideInVertically(Motion.slideSpring) { it / 8 }
+        else -> fadeIn(Motion.enterTween(220)) + scaleIn(Motion.scaleSpring, initialScale = 0.92f)
+    }
+    val exit = when (from) {
+        Overlay.None, Overlay.Menu -> ExitTransition.None
+        Overlay.Tabs -> if (intoTab) {
+            fadeOut(Motion.exitTween(180)) + scaleOut(Motion.exitTween(240), targetScale = 1.12f)
+        } else {
+            fadeOut(Motion.exitTween(180)) + scaleOut(Motion.exitTween(220), targetScale = 0.86f, transformOrigin = counter)
+        }
+        Overlay.Palette -> fadeOut(Motion.exitTween(150)) + slideOutVertically(Motion.exitTween()) { h -> if (barTop) -h / 20 else h / 20 }
+        Overlay.Reader -> fadeOut(Motion.exitTween(180)) + slideOutVertically(Motion.exitTween(240)) { it / 10 }
+        else -> fadeOut(Motion.exitTween(160)) + scaleOut(Motion.exitTween(), targetScale = 0.95f)
+    }
+    // The overlay that is coming in is drawn on top; no size animation (every overlay fills the screen).
+    return (enter togetherWith exit using null).apply { targetContentZIndex = if (to == Overlay.None) 0f else 1f }
 }
 
 @Composable
@@ -121,11 +143,17 @@ fun BrowserScreen(manager: TabManager) {
     val readingItems by manager.readingList.items.collectAsState()
     val message by manager.message.collectAsState()
     val fullScreen by manager.fullScreen.collectAsState()
+    // Floating video window: only the page (whose video fills it) is shown, no bars, sheets or dialogs.
+    val pip by manager.pictureInPicture.collectAsState()
     // Not read here (only inside the progress lines' draw phase): load steps do not recompose this screen.
     val loadProgress = manager.loadProgress.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
     val tab = tabs.firstOrNull { it.id == activeId } ?: return
     var overlay by remember { mutableStateOf(Overlay.None) }
+    // The tab grid closes by zooming into the picked tab (instead of back into the counter).
+    var tabPicked by remember { mutableStateOf(false) }
+    LaunchedEffect(overlay) { if (overlay == Overlay.Tabs) tabPicked = false }
+    LaunchedEffect(manager) { manager.pictureInPicture.collect { if (it) overlay = Overlay.None } }
     var notesOpenId by remember { mutableStateOf<String?>(null) }
     var creatingWorkspace by remember { mutableStateOf(false) }
     var readerArticle by remember { mutableStateOf<ReaderArticle?>(null) }
@@ -259,7 +287,12 @@ fun BrowserScreen(manager: TabManager) {
         MenuTile(R.string.menu_text_size, MenuIcons.TextSize) { textSizeOpen = true },
         MenuTile(R.string.menu_reopen_short, MenuIcons.Restore, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
         MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() },
-        MenuTile(R.string.menu_print, MenuIcons.Print, enabled = isWeb && !tab.isLoading) { printPage() },
+        // While a video plays here, the floating window takes the print tile's place (the grid stays 4 x 4).
+        if (manager.pictureInPictureVideo() != null) {
+            MenuTile(R.string.menu_pip, MenuIcons.PictureInPicture) { if (!manager.enterPictureInPicture()) toast(R.string.pip_unavailable) }
+        } else {
+            MenuTile(R.string.menu_print, MenuIcons.Print, enabled = isWeb && !tab.isLoading) { printPage() }
+        },
         MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
     ) }
     val menuInfo: @Composable () -> MenuInfo? = { when {
@@ -423,13 +456,13 @@ fun BrowserScreen(manager: TabManager) {
                     )
                 }
             }
-            if (toolbarTop) {
+            if (toolbarTop && !pip) {
                 // The status-bar strip stays in the bar's colour when the bar slides away.
                 Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(barBg))
                 bar()
             }
             // The page area ends where the bar starts, so overlays aligned to its bottom sit right above the bar.
-            Box(Modifier.weight(1f).fillMaxWidth().then(if (toolbarTop) Modifier.navigationBarsPadding() else Modifier.statusBarsPadding())) {
+            Box(Modifier.weight(1f).fillMaxWidth().then(if (pip) Modifier else if (toolbarTop) Modifier.navigationBarsPadding() else Modifier.statusBarsPadding())) {
                 WebViewHost(
                     webView = manager.webViewFor(tab.id),
                     onRefresh = { manager.reload(tab.id) },
@@ -457,9 +490,9 @@ fun BrowserScreen(manager: TabManager) {
                         modifier = Modifier.align(if (toolbarTop) Alignment.BottomCenter else Alignment.TopCenter).padding(8.dp).widthIn(max = 480.dp),
                     )
                 }
-                message?.let { m ->
-                    MessageBar(
-                        m, onDismiss = manager::dismissMessage,
+                run {
+                    AnimatedMessageBar(
+                        message.takeIf { !pip }, onDismiss = manager::dismissMessage, fromTop = toolbarTop,
                         modifier = Modifier.align(if (toolbarTop) Alignment.TopCenter else Alignment.BottomCenter)
                             .then(if (toolbarTop) Modifier else Modifier.imePadding()).padding(8.dp).widthIn(max = 520.dp),
                     )
@@ -476,29 +509,32 @@ fun BrowserScreen(manager: TabManager) {
                     )
                 }
             }
-            if (!toolbarTop) bar()
+            if (!toolbarTop && !pip) bar()
         } }
+        if (!pip) {
         // Full-screen overlays (and the menu sheet) follow the predictive back gesture.
         AnimatedContent(
             targetState = overlay,
-            transitionSpec = { overlayTransition(initialState, targetState) },
+            transitionSpec = { overlayTransition(initialState, targetState, toolbarTop, tabPicked) },
             contentAlignment = Alignment.BottomCenter,
             label = "overlay",
         ) { shown ->
-        if (shown != Overlay.None) PredictiveBackContainer(
+        // The menu sheet runs its own motion and predictive back (Scrim); full-screen overlays follow the gesture.
+        if (shown == Overlay.Menu) CompositionLocalProvider(LocalModalScope provides this) {
+            BrowserMenuGrid(menuTiles(), menuInfo(), onDismiss = { overlay = Overlay.None })
+        } else if (shown != Overlay.None) PredictiveBackContainer(
             onBack = { overlay = Overlay.None },
             // Only the overlay on screen listens; one that is animating out ignores a second back.
             enabled = shown == overlay,
-            style = if (shown == Overlay.Menu) BackStyle.SHEET else BackStyle.PAGE,
         ) {
         when (shown) {
             Overlay.None -> Unit
-            Overlay.Menu -> BrowserMenuGrid(menuTiles(), menuInfo(), onDismiss = { overlay = Overlay.None })
+            Overlay.Menu -> Unit
             Overlay.Tabs -> TabSwitcher(
                 tabs = workspaceTabs,
                 activeId = activeId,
                 canReopen = recentlyClosed.isNotEmpty(),
-                onSwitch = { manager.switchTo(it); overlay = Overlay.None },
+                onSwitch = { manager.switchTo(it); tabPicked = true; overlay = Overlay.None },
                 onClose = manager::closeTab,
                 onNewTab = { manager.openNewTab(); overlay = Overlay.None },
                 onNewPrivateTab = { manager.openNewTab(isPrivate = true); overlay = Overlay.None },
@@ -612,13 +648,13 @@ fun BrowserScreen(manager: TabManager) {
             }
         }
         } }
-        linkMenu?.let { state ->
+        Presence(linkMenu) { state ->
             val entries = LinkActions.menu(state.url, state.sourceIsPrivate).map { action ->
                 MenuEntry(linkMenuLabel(action)) { if (action == LinkMenuAction.SHARE) shareText(state.url) else manager.runLinkAction(state, action) }
             }
             BrowserMenu(entries, onDismiss = manager::dismissLinkMenu, header = state.url)
         }
-        if (addressMenuOpen) {
+        Presence(addressMenuOpen) {
             val hasClip = context.getSystemService(ClipboardManager::class.java)?.hasPrimaryClip() == true
             val entries = buildList {
                 if (isWeb) add(MenuEntry(R.string.address_copy) { manager.copyToClipboard(tab.url) })
@@ -632,7 +668,7 @@ fun BrowserScreen(manager: TabManager) {
             }
             BrowserMenu(entries, onDismiss = { addressMenuOpen = false }, header = if (isWeb) tab.url else null)
         }
-        siteOptions?.let { site ->
+        Presence(siteOptions) { site ->
             val entries = listOf(
                 MenuEntry(R.string.link_open_tab) { manager.newTab(url = site.url) },
                 MenuEntry(R.string.link_copy) { manager.copyToClipboard(site.url) },
@@ -644,7 +680,7 @@ fun BrowserScreen(manager: TabManager) {
             )
             BrowserMenu(entries, onDismiss = { siteOptions = null }, header = site.host)
         }
-        historySteps?.let { steps ->
+        Presence(historySteps) { steps ->
             val entries = steps.map { step ->
                 MenuEntry(0, text = step.title.ifBlank { UrlUtils.shortUrlLabel(step.url) }, subtitle = UrlUtils.shortUrlLabel(step.url)) {
                     manager.goBackOrForward(tab.id, step.steps)
@@ -652,7 +688,7 @@ fun BrowserScreen(manager: TabManager) {
             }
             BrowserMenu(entries, onDismiss = { historySteps = null }, header = stringResource(R.string.tab_history))
         }
-        siteInfo?.let { info ->
+        Presence(siteInfo) { info ->
             val host = HostUtils.hostOfUrl(tab.url)
             SiteInfoSheet(
                 info = info,
@@ -671,7 +707,7 @@ fun BrowserScreen(manager: TabManager) {
                 onDismiss = { siteInfo = null },
             )
         }
-        if (textSizeOpen) {
+        Presence(textSizeOpen) {
             TextSizeDialog(
                 zoom = settings.textZoom,
                 onChange = { zoom -> manager.updateSettings { it.copy(textZoom = zoom) } },
@@ -679,16 +715,16 @@ fun BrowserScreen(manager: TabManager) {
             )
         }
         glance?.let { g ->
-            PredictiveBackContainer(onBack = manager::closeGlance, style = BackStyle.SHEET) { GlanceSheet(
+            GlanceSheet(
                 glance = g,
                 webView = manager.glanceWebView(),
                 onOpenInTab = manager::expandGlance,
                 onOpenInBackground = manager::backgroundGlance,
                 onClose = manager::closeGlance,
                 loadProgress = { loadProgress.value[g.id] ?: g.progress },
-            ) }
+            )
         }
-        if (creatingWorkspace) {
+        Presence(creatingWorkspace) {
             WorkspaceEditorDialog(
                 title = stringResource(R.string.workspace_new),
                 initial = null,
@@ -699,6 +735,7 @@ fun BrowserScreen(manager: TabManager) {
             )
         }
         (dialogs.firstOrNull { it.tabId == glance?.id } ?: dialogs.firstOrNull { it.tabId == activeId })?.let { PageDialogView(it) }
+        }
         // Full screen video above everything else.
         fullScreen?.let { FullScreenLayer(it, onExit = manager::exitFullScreen) }
         if (!settings.onboardingDone) {

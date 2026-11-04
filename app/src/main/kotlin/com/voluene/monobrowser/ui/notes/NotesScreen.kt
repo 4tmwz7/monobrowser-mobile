@@ -79,15 +79,15 @@ fun NotesScreen(
         onNew = { openId = repository.create() },
         onClose = onClose,
     )
-    if (id != null) androidx.compose.runtime.key(id) {
-        val back = {
+    val back: () -> Unit = {
+        id?.let { open ->
             repository.flush()
-            repository.discardIfBlank(id)
-            openId = null
+            repository.discardIfBlank(open)
         }
-        PredictiveBackContainer(onBack = back) {
-            NoteEditor(repository = repository, id = id, onOpenUrl = onOpenUrl, onBack = back)
-        }
+        openId = null
+    }
+    com.voluene.monobrowser.ui.common.PushedPage(id, onBack = back) { shown ->
+        NoteEditor(repository = repository, id = shown, onOpenUrl = onOpenUrl, onBack = back)
     }
 }
 

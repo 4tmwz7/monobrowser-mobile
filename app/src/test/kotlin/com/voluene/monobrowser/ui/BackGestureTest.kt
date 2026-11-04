@@ -23,4 +23,15 @@ class BackGestureTest {
         assertEquals(0.05f, BackGesture.shift(1f), 1e-6f)
         assertEquals(0f, BackGesture.shift(0f), 0f)
     }
+
+    @Test fun followsTheFingerVerticallyWithResistance() {
+        val h = 2000f
+        assertEquals(0f, BackGesture.follow(0f, h), 0.001f)
+        assertEquals(h / 20f, BackGesture.follow(5000f, h), 0.001f) // capped
+        assertEquals(-h / 20f, BackGesture.follow(-5000f, h), 0.001f)
+        val small = BackGesture.follow(100f, h)
+        assertTrue(small > 0f && small < h / 20f)
+        assertTrue(small > 100f / h * h / 20f) // decelerating: small moves respond more than linearly
+        assertEquals(0f, BackGesture.follow(100f, 0f), 0.001f)
+    }
 }

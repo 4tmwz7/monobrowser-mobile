@@ -3,7 +3,9 @@ package com.voluene.monobrowser
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import com.voluene.monobrowser.browser.PictureInPicture
 import android.webkit.WebChromeClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -85,9 +87,79 @@ class MainActivity : ComponentActivity(), ActivityHost {
                 if (LocaleHelper.apply(this@MainActivity, language)) recreate()
             }
         }
+        // Floating video window: kept in step with what plays, so the system can shrink the app into it smoothly
+        // (Android 12+ enters it by itself on the home gesture; older versions on onUserLeaveHint).
+        lifecycleScope.launch {
+            kotlinx.coroutines.flow.combine((application as MonoApp).webMedia.state, tabManager.settings.map { it.autoPictureInPicture }, tabManager.activeTabId) { _, auto, _ ->
+                // Only what the window depends on (position reports every few seconds change nothing here).
+                tabManager.pictureInPictureVideo(requirePlaying = false)?.let { listOf(it.playing, it.videoWidth, it.videoHeight) } to auto
+            }.distinctUntilChanged().collect { updatePictureInPicture() }
+        }
         setContent {
             val settings by tabManager.settings.collectAsState()
             MonoTheme(settings.themeId, settings.themeMode) { BrowserScreen(tabManager) }
+        }
+    }
+
+    // --- Picture in picture ---
+
+    private fun pictureInPictureParams(): android.app.PictureInPictureParams? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+        // In the window a paused video stays (with a play button); entering needs one that plays.
+        val video = tabManager.pictureInPictureVideo(requirePlaying = false)
+        val canEnter = video?.playing == true
+        val builder = android.app.PictureInPictureParams.Builder()
+        if (video != null) {
+            // The system accepts 1:2.39 .. 2.39:1.
+            val ratio = PictureInPicture.ratio(video.videoWidth, video.videoHeight)
+            builder.setAspectRatio(android.util.Rational(ratio.first, ratio.second))
+            builder.setActions(listOf(pictureInPictureAction(video.playing)))
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(canEnter && tabManager.settings.value.autoPictureInPicture)
+            builder.setSeamlessResizeEnabled(true)
+        }
+        return builder.build()
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+    private fun pictureInPictureAction(playing: Boolean): android.app.RemoteAction {
+        val action = if (playing) com.voluene.monobrowser.media.MediaPlaybackService.ACTION_PAUSE else com.voluene.monobrowser.media.MediaPlaybackService.ACTION_PLAY
+        val intent = android.app.PendingIntent.getService(
+            this, if (playing) 11 else 12, Intent(this, WebMediaService::class.java).setAction(action),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val label = getString(if (playing) R.string.media_pause else R.string.media_play)
+        val icon = android.graphics.drawable.Icon.createWithResource(this, if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+        return android.app.RemoteAction(icon, label, label, intent)
+    }
+
+    private fun updatePictureInPicture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        pictureInPictureParams()?.let { runCatching { setPictureInPictureParams(it) } }
+    }
+
+    override fun enterPictureInPicture(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) return false
+        if (tabManager.pictureInPictureVideo() == null) return false
+        val params = pictureInPictureParams() ?: return false
+        return runCatching { enterPictureInPictureMode(params) }.getOrDefault(false)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 12+ enters by itself (auto-enter); before that, going home with a video playing enters here.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && tabManager.settings.value.autoPictureInPicture) enterPictureInPicture()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        tabManager.onPictureInPicture(isInPictureInPictureMode)
+        // Left the window by closing it (not by expanding it back): the activity is stopped, not resumed.
+        if (!isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+            tabManager.onPictureInPictureDismissed()
         }
     }
 

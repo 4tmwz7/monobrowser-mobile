@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
+import com.voluene.monobrowser.browser.MonoWebView
 import com.voluene.monobrowser.browser.PullRefresh
 
 /**
@@ -34,15 +35,21 @@ class PullRefreshLayout(context: Context) : FrameLayout(context) {
 
     private fun content(): View? = getChildAt(0)
 
+    /**
+     * The page (not a scrollable box inside it) is being pulled down past its top. Other views: at the top is enough.
+     */
+    private fun pastTop(): Boolean = (content() as? MonoWebView)?.pulledPastTop ?: true
+
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 startX = ev.x
                 startY = ev.y
                 canStart = content()?.canScrollVertically(-1) == false
+                (content() as? MonoWebView)?.pulledPastTop = false
                 pulling = false
             }
-            MotionEvent.ACTION_MOVE -> if (!pulling && PullRefresh.shouldStartPull(ev.y - startY, ev.x - startX, slop, canStart)) {
+            MotionEvent.ACTION_MOVE -> if (!pulling && PullRefresh.shouldStartPull(ev.y - startY, ev.x - startX, slop, canStart && pastTop())) {
                 pulling = true
                 startY = ev.y // the line starts growing from here
             }

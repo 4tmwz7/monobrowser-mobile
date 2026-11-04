@@ -25,4 +25,7 @@ interface ActivityHost {
      * GPU (PixelCopy): nothing is redrawn on the main thread. [onResult] runs on the main thread, false on failure.
      */
     fun copyFromScreen(source: android.graphics.Rect, target: android.graphics.Bitmap, onResult: (Boolean) -> Unit)
+
+    /** Shrinks the app into a floating window showing the playing video; false when not possible. */
+    fun enterPictureInPicture(): Boolean = false
 }

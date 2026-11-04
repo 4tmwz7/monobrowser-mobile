@@ -191,7 +191,7 @@ fun UpdateNotesSheet(updater: UpdateManager, release: ReleaseInfo, onOpenUrl: (S
             val corners = rememberScreenAwareShape()
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp)
-                    .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(2.dp, scheme.outline, corners.shape)
+                    .then(corners.modifier).sheetMotion().clip(corners.shape).background(scheme.background, corners.shape).border(2.dp, scheme.outline, corners.shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                     .navigationBarsPadding().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),

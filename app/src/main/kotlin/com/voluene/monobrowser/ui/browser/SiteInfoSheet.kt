@@ -67,7 +67,7 @@ fun SiteInfoSheet(
     Scrim(onDismiss) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .then(corners.modifier).clip(corners.shape)
+                .then(corners.modifier).sheetMotion().clip(corners.shape)
                 .background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {}.navigationBarsPadding(),
         ) {

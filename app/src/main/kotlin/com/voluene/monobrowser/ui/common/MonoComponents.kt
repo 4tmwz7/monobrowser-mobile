@@ -1,6 +1,7 @@
 package com.voluene.monobrowser.ui.common
 
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
@@ -9,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -67,24 +67,19 @@ fun MonoButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier
     ) { Text(label, color = fg.copy(alpha = if (enabled) 1f else 0.4f), fontWeight = FontWeight.Medium, fontSize = 14.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip) }
 }
 
-/** Dimmed scrim; a tap on it calls [onDismiss] (null = the scrim does not dismiss). */
+/** Dimmed scrim; a tap on it calls [onDismiss] (null = the scrim does not dismiss). See [ModalHost]. */
 @Composable
-fun Scrim(onDismiss: (() -> Unit)?, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    val source = remember { MutableInteractionSource() }
-    Box(
-        modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))
-            .clickable(interactionSource = source, indication = null) { onDismiss?.invoke() },
-    ) { content() }
-}
+fun Scrim(onDismiss: (() -> Unit)?, modifier: Modifier = Modifier, content: @Composable ModalScope.() -> Unit) =
+    ModalHost(onDismiss, modifier, content)
 
-/** Centered rectangular dialog with a hard border (no rounded corners, no shadow). */
+/** Centered rectangular dialog with a hard border (no rounded corners, no shadow); pops in with a soft spring. */
 @Composable
 fun MonoDialog(onDismiss: (() -> Unit)?, content: @Composable ColumnScope.() -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val source = remember { MutableInteractionSource() }
     Scrim(onDismiss) {
         Column(
-            Modifier.align(Alignment.Center).padding(24.dp).fillMaxWidth()
+            Modifier.align(Alignment.Center).padding(24.dp).fillMaxWidth().dialogMotion()
                 .background(scheme.background).border(2.dp, scheme.outline, RectangleShape)
                 // Swallow taps so they do not reach the scrim.
                 .clickable(interactionSource = source, indication = null) {}
@@ -112,22 +107,37 @@ fun ScreenScaffold(title: String, onClose: () -> Unit, actions: @Composable () -
     }
 }
 
-/** Rectangular on/off switch: a hard-edged track with a square thumb. */
+/** Rectangular on/off switch: a hard-edged track with a square thumb that springs across and inverts. */
 @Composable
 fun MonoSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
+    // One animated value drives position and colours; it is only read in the draw phase (no recomposition per frame).
+    val t = androidx.compose.animation.core.animateFloatAsState(
+        if (checked) 1f else 0f, androidx.compose.animation.core.spring(dampingRatio = 0.7f, stiffness = 700f), label = "switch",
+    )
+    val on = scheme.onBackground
+    val off = scheme.background
     Box(
         modifier.size(width = 46.dp, height = 26.dp)
-            .background(if (checked) scheme.onBackground else scheme.background)
-            .border(2.dp, scheme.outline, RectangleShape)
             .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
-            .padding(3.dp),
-    ) {
-        Box(
-            Modifier.align(if (checked) Alignment.CenterEnd else Alignment.CenterStart).size(16.dp)
-                .background(if (checked) scheme.background else scheme.onBackground),
-        )
-    }
+            .drawBehind {
+                val f = t.value.coerceIn(0f, 1f)
+                drawRect(androidx.compose.ui.graphics.lerp(off, on, f))
+                val stroke = 2.dp.toPx()
+                drawRect(scheme.outline, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke * 2))
+                val inset = 5.dp.toPx()
+                val thumb = 16.dp.toPx()
+                // Overshoot of the spring stretches the thumb a little instead of moving it past the track.
+                val travel = size.width - 2 * inset - thumb
+                val x = inset + travel * t.value.coerceIn(0f, 1f)
+                val stretch = (kotlin.math.abs(t.value - t.value.coerceIn(0f, 1f)) * travel).coerceAtMost(4.dp.toPx())
+                drawRect(
+                    androidx.compose.ui.graphics.lerp(on, off, f),
+                    topLeft = androidx.compose.ui.geometry.Offset(if (t.value > 1f) x - stretch else x, (size.height - thumb) / 2),
+                    size = androidx.compose.ui.geometry.Size(thumb + stretch, thumb),
+                )
+            },
+    )
 }
 
 /** Square checkbox with a label. */

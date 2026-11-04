@@ -2,7 +2,6 @@ package com.voluene.monobrowser.ui_tests
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.view.LayoutInflater
 import android.view.View
 import androidx.test.core.app.ApplicationProvider
 import com.voluene.monobrowser.R
@@ -20,7 +19,8 @@ class WidgetTest {
     private fun render(name: String) {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val density = context.resources.displayMetrics.density
-        val view = LayoutInflater.from(context).inflate(R.layout.widget_search, null)
+        // Through RemoteViews, like a launcher: only @RemoteView classes may be inflated (a plain View throws).
+        val view = android.widget.RemoteViews(context.packageName, R.layout.widget_search).apply(context, android.widget.FrameLayout(context))
         val w = (360 * density).toInt()
         val h = (56 * density).toInt()
         val pad = (16 * density).toInt()

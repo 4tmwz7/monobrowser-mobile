@@ -44,6 +44,35 @@ object Artwork {
         }
     }.getOrNull()
 
+    private val YOUTUBE = Regex("^https://i\\.ytimg\\.com/vi(_webp)?/([\\w-]{6,})/[a-z]*default\\.(jpg|webp)(\\?.*)?$")
+
+    /**
+     * Cover for [url]; YouTube thumbnails are tried from the sharpest one down (maxres is missing for some videos)
+     * and the 4:3 ones lose their black bars.
+     */
+    fun cover(url: String): Bitmap? {
+        for (candidate in candidates(url)) {
+            val bitmap = download(candidate) ?: continue
+            return if (candidate.endsWith("/maxresdefault.jpg")) bitmap else cropLetterbox(bitmap)
+        }
+        return null
+    }
+
+    /** URLs to try for a cover, best first (pure). */
+    fun candidates(url: String): List<String> {
+        val id = YOUTUBE.matchEntire(url)?.groupValues?.get(2) ?: return listOf(url)
+        return listOf("maxresdefault", "sddefault", "hqdefault").map { "https://i.ytimg.com/vi/$id/$it.jpg" }
+    }
+
+    /** 4:3 thumbnails of 16:9 videos carry black bars at the top and bottom: keep the 16:9 middle. */
+    private fun cropLetterbox(bitmap: Bitmap): Bitmap {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w <= 0 || h <= 0 || kotlin.math.abs(w * 3 - h * 4) > w / 20) return bitmap
+        val target = w * 9 / 16
+        return runCatching { Bitmap.createBitmap(bitmap, 0, (h - target) / 2, w, target) }.getOrDefault(bitmap)
+    }
+
     private val cache = HashMap<String, Bitmap>()
 
     /** The app's look as a cover: the site's monogram, white on black (read aloud, pages without artwork). */

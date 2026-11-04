@@ -118,7 +118,11 @@ class ScreenAwareShape internal constructor(private val view: View) {
 
     /** Put it before the background/border/clip that use [shape]. */
     val modifier: Modifier = Modifier.onGloballyPositioned { coordinates ->
-        val next = ConcentricCorners.radii(coordinates.boundsInWindow(), ConcentricCorners.displayCorners(view))
+        val bounds = coordinates.boundsInWindow()
+        // Mid-animation (scaled, or partly off screen): keep the last shape, so nothing recomposes per frame and
+        // the corners do not flicker between square and round while a page or sheet moves.
+        if (inMotion(bounds, coordinates.size)) return@onGloballyPositioned
+        val next = ConcentricCorners.radii(bounds, ConcentricCorners.displayCorners(view))
         if (next != radii) radii = next
     }
 }
@@ -136,12 +140,17 @@ fun Modifier.cornerSafeHorizontalPadding(fromBottom: Boolean, sampleFraction: Fl
     return this
         .onGloballyPositioned { coordinates ->
             val rect = coordinates.boundsInWindow()
+            if (inMotion(rect, coordinates.size)) return@onGloballyPositioned
             val y = if (fromBottom) rect.bottom - rect.height * sampleFraction else rect.top + rect.height * sampleFraction
             val next = ConcentricCorners.horizontalInsets(rect, ConcentricCorners.displayCorners(view), y, fromBottom, with(density) { margin.toPx() })
             if (next != insets) insets = next
         }
         .padding(start = with(density) { insets.first.toDp() }, end = with(density) { insets.second.toDp() })
 }
+
+/** The element is drawn scaled or clipped by the window edge, i.e. it is being animated. */
+private fun inMotion(bounds: androidx.compose.ui.geometry.Rect, size: androidx.compose.ui.unit.IntSize): Boolean =
+    kotlin.math.abs(bounds.width - size.width) > 1f || kotlin.math.abs(bounds.height - size.height) > 1f
 
 @Composable
 fun rememberScreenAwareShape(): ScreenAwareShape {

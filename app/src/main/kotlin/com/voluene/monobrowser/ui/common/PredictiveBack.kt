@@ -3,7 +3,6 @@ package com.voluene.monobrowser.ui.common
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -13,11 +12,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalView
@@ -29,7 +27,7 @@ import kotlinx.coroutines.launch
 enum class BackStyle {
     /** Full-screen page: shrinks and moves away from the swiping edge, revealing what is under it (system style). */
     PAGE,
-    /** Bottom sheet: slides down. */
+    /** Bottom sheet: shrinks towards the bottom edge (sheets inside a Scrim do this themselves). */
     SHEET,
 }
 
@@ -48,31 +46,42 @@ fun PredictiveBackContainer(
 ) {
     val back by rememberUpdatedState(onBack)
     val progress = remember { Animatable(0f) }
+    // Vertical finger travel since the gesture started (px); the page follows it a little, like the system's.
+    val dy = remember { Animatable(0f) }
     val edge = remember { intArrayOf(BackEventCompat.EDGE_LEFT) }
     val scope = rememberCoroutineScope()
     PredictiveBackHandler(enabled) { events ->
+        var startY = Float.NaN
         try {
             events.collect { event ->
                 edge[0] = event.swipeEdge
+                if (startY.isNaN()) startY = event.touchY
                 progress.snapTo(BackGesture.ease(event.progress))
+                dy.snapTo(event.touchY - startY)
             }
             back()
         } catch (e: CancellationException) {
-            scope.launch { progress.animateTo(0f, spring()) }
+            scope.launch { progress.animateTo(0f, Motion.settleSpring) }
+            scope.launch { dy.animateTo(0f, Motion.settleSpring) }
             throw e
         }
     }
-    val outline = MaterialTheme.colorScheme.outline
     val view = LocalView.current
-    val pageShape = remember(view) {
-        val radius = ConcentricCorners.displayCorners(view).maxOfOrNull { it?.radius ?: 0f } ?: 0f
-        if (radius > 0f) RoundedCornerShape(radius) else RectangleShape
+    val density = LocalDensity.current
+    // The lifted page gets the screen's corner radius (a card of the same shape as the display), or 28 dp.
+    val radius = remember(view) {
+        ConcentricCorners.displayCorners(view).maxOfOrNull { it?.radius ?: 0f }?.takeIf { it > 0f } ?: with(density) { 28.dp.toPx() }
     }
     // Swallows touches that the content does not use, so nothing underneath reacts to them.
     Box(modifier.fillMaxSize().pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {
-        // Dim what is revealed underneath (only while the gesture runs).
-        if (style == BackStyle.PAGE && progress.value > 0f) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f * progress.value)))
+        // Dim what is revealed underneath (drawn only while the gesture runs; no recomposition per frame).
+        if (style == BackStyle.PAGE) {
+            Box(
+                Modifier.fillMaxSize().drawBehind {
+                    val p = progress.value
+                    if (p > 0f) drawRect(Color.Black.copy(alpha = 0.35f * p))
+                },
+            )
         }
         Box(
             Modifier.fillMaxSize().graphicsLayer {
@@ -85,18 +94,18 @@ fun PredictiveBackContainer(
                         scaleY = scale
                         val direction = if (edge[0] == BackEventCompat.EDGE_RIGHT) -1f else 1f
                         translationX = direction * BackGesture.shift(p) * size.width
-                        shape = pageShape
+                        translationY = BackGesture.follow(dy.value, size.height) * p
+                        // Corners round off over the first part of the swipe (no hard switch from square to round).
+                        shape = RoundedCornerShape(radius * (p * 4f).coerceAtMost(1f) / scale)
                         clip = true
                     }
                     BackStyle.SHEET -> {
-                        translationY = p * size.height * 0.35f
-                        alpha = 1f - p * 0.4f
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                        scaleX = 1f - 0.1f * p
+                        scaleY = 1f - 0.06f * p
                     }
                 }
-            }.then(
-                // The shrinking page gets a hard edge, like a card lifted off the stack.
-                if (style == BackStyle.PAGE && progress.value > 0f) Modifier.border(2.dp, outline, pageShape) else Modifier,
-            ),
+            },
         ) { content() }
     }
 }
@@ -111,6 +120,18 @@ object BackGesture {
 
     /** 100 % -> 90 %, like the system's cross-activity animation. */
     fun scale(progress: Float): Float = 1f - 0.1f * progress.coerceIn(0f, 1f)
+
+    /**
+     * Vertical offset (px) for a finger that moved [dy] px since the gesture started: follows it with resistance,
+     * at most 1/20 of the height (Material's predictive back).
+     */
+    fun follow(dy: Float, height: Float): Float {
+        if (height <= 0f) return 0f
+        val max = height / 20f
+        val x = (dy / height).coerceIn(-1f, 1f)
+        // Decelerating: quick response to small moves, never past [max].
+        return max * kotlin.math.sign(x) * (1f - (1f - kotlin.math.abs(x)) * (1f - kotlin.math.abs(x)))
+    }
 
     /** Horizontal shift as a fraction of the width, away from the swiping edge. */
     fun shift(progress: Float): Float = 0.05f * progress.coerceIn(0f, 1f)

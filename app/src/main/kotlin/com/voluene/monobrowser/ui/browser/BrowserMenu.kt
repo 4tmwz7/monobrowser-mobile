@@ -62,7 +62,7 @@ fun BrowserMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, header: String?
     Scrim(onDismiss) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
+                .then(corners.modifier).sheetMotion().clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {}.navigationBarsPadding(),
         ) {
             if (header != null) {
@@ -119,9 +119,10 @@ fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Uni
     // The sheet's bottom corners follow the screen's rounded corners.
     val corners = rememberScreenAwareShape()
     Scrim(onDismiss) {
+        val modal = this
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
+                .then(corners.modifier).sheetMotion().clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {}.navigationBarsPadding(),
         ) {
             if (info != null) {
@@ -158,7 +159,7 @@ fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Uni
                                 val base = if (tile.active) scheme.background else scheme.onBackground
                                 val color = base.copy(alpha = if (tile.enabled) 1f else 0.35f)
                                 Column(
-                                    Modifier.weight(1f).fillMaxHeight()
+                                    Modifier.weight(1f).fillMaxHeight().then(with(modal) { Modifier.stagger(rowIndex * 2 + i / 2) })
                                         .then(if (tile.active) Modifier.background(scheme.onBackground) else Modifier)
                                         .clickable(enabled = tile.enabled) { onDismiss(); tile.onClick() }
                                         .padding(horizontal = 4.dp),

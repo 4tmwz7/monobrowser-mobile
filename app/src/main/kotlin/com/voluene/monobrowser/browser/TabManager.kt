@@ -696,7 +696,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         // Application context: the WebView outlives the Activity (config changes are handled manually).
         // Dialogs, file choosers and permission requests are routed through [TabUi] / [host] instead.
         // The context theme decides prefers-color-scheme (and whether algorithmic darkening may apply).
-        val webView = WebView(ContextThemeWrapper(getApplication(), if (webDark) R.style.Theme_MonoBrowser_WebDark else R.style.Theme_MonoBrowser_WebLight))
+        val webView = MonoWebView(ContextThemeWrapper(getApplication(), if (webDark) R.style.Theme_MonoBrowser_WebDark else R.style.Theme_MonoBrowser_WebLight))
         // Profile must be set before any other WebView call.
         if (tab.isPrivate && privateProfilesSupported) {
             ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE)
@@ -1635,23 +1635,51 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
 
     // --- Media playing in pages ---
 
+    private val _pictureInPicture = MutableStateFlow(false)
+    /** The app is a floating video window: only the video is shown. */
+    val pictureInPicture: StateFlow<Boolean> = _pictureInPicture.asStateFlow()
+
+    /** The video that a floating window would show: playing, in the current tab. */
+    fun pictureInPictureVideo(requirePlaying: Boolean = true): com.voluene.monobrowser.media.WebMediaState? =
+        webMedia.state.value?.takeIf { (it.playing || !requirePlaying) && it.isVideo && it.tabId == _activeTabId.value }
+
+    fun enterPictureInPicture(): Boolean = host?.enterPictureInPicture() == true
+
+    /** The window became (or stopped being) a floating video window: the video fills the page meanwhile. */
+    fun onPictureInPicture(active: Boolean) {
+        if (_pictureInPicture.value == active) return
+        _pictureInPicture.value = active
+        val tabId = webMedia.state.value?.tabId ?: _activeTabId.value
+        // A page element already in full screen is shown as it is.
+        if (active && _fullScreen.value != null) return
+        webViews[tabId]?.let { runCatching { it.evaluateJavascript("window.__monoPip && window.__monoPip($active)", null) } }
+    }
+
+    /** The floating window was closed (swiped away): like closing a video player, playback stops. */
+    fun onPictureInPictureDismissed() {
+        webMedia.state.value?.let { pause(it.tabId) }
+    }
+
     /** The page reports play / pause (WebMediaHub.SCRIPT); called on a WebView thread. */
     private inner class MediaBridge(private val tabId: Long) {
         @JavascriptInterface
         fun state(
             playing: Boolean, title: String, artist: String, canNext: Boolean, canPrevious: Boolean,
-            artwork: String, positionMs: Double, durationMs: Double, rate: Double,
+            artwork: String, positionMs: Double, durationMs: Double, rate: Double, videoWidth: Double, videoHeight: Double,
         ) {
             val at = SystemClock.elapsedRealtime()
             mainHandler.post {
-                onWebMedia(tabId, playing, title, artist, canNext, canPrevious, artwork, positionMs.toLong(), durationMs.toLong(), at, rate.toFloat())
+                onWebMedia(
+                    tabId, playing, title, artist, canNext, canPrevious, artwork, positionMs.toLong(), durationMs.toLong(), at, rate.toFloat(),
+                    videoWidth.toInt().coerceIn(0, 16384), videoHeight.toInt().coerceIn(0, 16384),
+                )
             }
         }
     }
 
     private fun onWebMedia(
         tabId: Long, playing: Boolean, title: String, artist: String, canNext: Boolean, canPrevious: Boolean,
-        artwork: String, positionMs: Long, durationMs: Long, at: Long, rate: Float,
+        artwork: String, positionMs: Long, durationMs: Long, at: Long, rate: Float, videoWidth: Int = 0, videoHeight: Int = 0,
     ) {
         val tab = tab(tabId) ?: return
         val current = webMedia.state.value
@@ -1663,6 +1691,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
                 artworkUrl = artwork.take(2048).takeIf { UrlUtils.isHttpUrl(it) }.orEmpty(),
                 positionMs = positionMs.coerceAtLeast(0), durationMs = durationMs.coerceAtLeast(0), updatedAt = at,
                 rate = rate.takeIf { it in 0.1f..16f } ?: 1f,
+                videoWidth = videoWidth, videoHeight = videoHeight,
             ),
         )
         if (playing) {

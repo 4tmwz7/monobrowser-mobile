@@ -51,12 +51,12 @@ fun GlanceSheet(
     loadProgress: () -> Int = { glance.progress },
 ) {
     val scheme = MaterialTheme.colorScheme
-    // System back (with its predictive animation) is handled by the caller's PredictiveBackContainer.
+    // System back (with its predictive animation) is handled by the Scrim.
     val corners = rememberScreenAwareShape()
     Scrim(onClose) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HEIGHT_FRACTION)
-                .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
+                .then(corners.modifier).sheetMotion().clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {},
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
