@@ -483,4 +483,26 @@
     <string name="downloads_count">Pobierane pliki: %1$d</string>
     <string name="downloads_progress">%1$s z %2$s</string>
     <string name="downloads_cancel">Anuluj</string>
+    <string name="sync_section">Synchronizacja</string>
+    <string name="sync_setup">Skonfiguruj synchronizację</string>
+    <string name="sync_setup_hint">Zakładki, przypięte strony, lista do przeczytania i notatki w pliku na Dysku Google lub w innej chmurze</string>
+    <string name="sync_setup_text">MonoBrowser trzyma plik synchronizacji w miejscu, które wybierzesz: na Dysku Google, w OneDrive, Dropbox, Nextcloud albo na tym urządzeniu. Na pierwszym urządzeniu utwórz nowy plik, na kolejnych wybierz ten sam plik.</string>
+    <string name="sync_create">Utwórz nowy plik synchronizacji</string>
+    <string name="sync_choose">Użyj istniejącego pliku</string>
+    <string name="sync_desktop_hint">Z aplikacją Dysk Google na komputer ten sam plik w folderze Dysku może służyć MonoBrowserowi na komputerze.</string>
+    <string name="sync_file">Plik synchronizacji</string>
+    <string name="sync_now">Synchronizuj teraz</string>
+    <string name="sync_running">Synchronizacja…</string>
+    <string name="sync_never">Jeszcze nie zsynchronizowano</string>
+    <string name="sync_last">Ostatnia synchronizacja: %1$s</string>
+    <string name="sync_written_by">plik zapisał %1$s</string>
+    <string name="sync_what">Co jest synchronizowane</string>
+    <string name="sync_what_hint">Zakładki z folderami, przypięte strony, lista do przeczytania (do czytania offline), notatki. Przy otwarciu i opuszczeniu aplikacji.</string>
+    <string name="sync_stop">Zatrzymaj synchronizację</string>
+    <string name="sync_stop_hint">Plik i dane na tym urządzeniu zostają bez zmian</string>
+    <string name="sync_stop_message">To urządzenie przestanie czytać i zapisywać plik synchronizacji. Nic nie zostanie usunięte.</string>
+    <string name="sync_stop_confirm">Zatrzymaj</string>
+    <string name="sync_error_access">Brak dostępu do pliku synchronizacji. Zatrzymaj synchronizację i wybierz plik ponownie.</string>
+    <string name="sync_error_format">To nie jest plik synchronizacji MonoBrowser.</string>
+    <string name="sync_error_io">Nie udało się odczytać ani zapisać pliku (brak sieci?). Spróbuję ponownie.</string>
 </resources>

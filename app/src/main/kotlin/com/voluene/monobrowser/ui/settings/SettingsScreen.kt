@@ -162,6 +162,8 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
     val exceptions by manager.adBlocker.exceptions.hostsFlow.collectAsState()
     var dialog by remember { mutableStateOf<String?>(null) }
     var clearDialog by remember { mutableStateOf(false) }
+    var syncSetup by remember { mutableStateOf(false) }
+    var syncStop by remember { mutableStateOf(false) }
     fun update(transform: (AppSettings) -> AppSettings) = manager.updateSettings(transform)
 
     val engineNames = mapOf(
@@ -216,6 +218,8 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             SettingRow(stringResource(R.string.settings_toolbar), toolbarNames[settings.toolbarPosition], onClick = { dialog = "toolbar" })
             SwitchRow(stringResource(R.string.settings_full_address), stringResource(R.string.settings_full_address_hint), settings.showFullAddress) { v -> update { it.copy(showFullAddress = v) } }
             SettingRow(stringResource(R.string.settings_link_longpress), linkNames[settings.linkLongPress], onClick = { dialog = "linkLongPress" })
+
+            SyncRows(manager, settings.syncUri, onSetUp = { syncSetup = true }, onStop = { syncStop = true })
 
             Section(stringResource(R.string.settings_section_appearance))
             SettingRow(stringResource(R.string.settings_theme), themeName, onClick = { open(Page.Theme) })
@@ -297,6 +301,54 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
         )
     }
     if (clearDialog) ClearDataDialog(manager) { clearDialog = false }
+    if (syncSetup) {
+        val scheme = MaterialTheme.colorScheme
+        MonoDialog({ syncSetup = false }) {
+            Text(stringResource(R.string.sync_setup), color = scheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.sync_setup_text), color = scheme.onBackground, fontSize = 14.sp, lineHeight = 20.sp)
+            MonoButton(stringResource(R.string.sync_create), {
+                syncSetup = false
+                manager.host?.createDocument("monobrowser-sync.json", "application/json") { uri -> uri?.let(manager::useSyncFile) }
+            }, Modifier.fillMaxWidth(), inverted = true)
+            MonoButton(stringResource(R.string.sync_choose), {
+                syncSetup = false
+                manager.host?.openDocument(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) { uri -> uri?.let(manager::useSyncFile) }
+            }, Modifier.fillMaxWidth())
+            Text(stringResource(R.string.sync_desktop_hint), color = scheme.onBackground.copy(alpha = 0.65f), fontSize = 12.sp, lineHeight = 17.sp)
+        }
+    }
+    if (syncStop) {
+        ConfirmDialog(
+            stringResource(R.string.sync_stop), stringResource(R.string.sync_stop_message), stringResource(R.string.sync_stop_confirm),
+            onConfirm = manager::stopSync, onDismiss = { syncStop = false },
+        )
+    }
+}
+
+// ---- sync ----
+
+@Composable
+private fun SyncRows(manager: TabManager, uri: String, onSetUp: () -> Unit, onStop: () -> Unit) {
+    val status by manager.sync.status.collectAsState()
+    Section(stringResource(R.string.sync_section))
+    if (uri.isBlank()) {
+        SettingRow(stringResource(R.string.sync_setup), stringResource(R.string.sync_setup_hint), onClick = onSetUp)
+        return
+    }
+    val (name, provider) = remember(uri) { manager.sync.describe(uri) }
+    SettingRow(stringResource(R.string.sync_file), listOf(name, provider).filter { it.isNotBlank() }.joinToString("  \u00b7  ").ifBlank { uri })
+    val statusText = when {
+        status.running -> stringResource(R.string.sync_running)
+        status.error == com.voluene.monobrowser.sync.SyncError.NO_ACCESS -> stringResource(R.string.sync_error_access)
+        status.error == com.voluene.monobrowser.sync.SyncError.NOT_A_SYNC_FILE -> stringResource(R.string.sync_error_format)
+        status.error == com.voluene.monobrowser.sync.SyncError.IO -> stringResource(R.string.sync_error_io)
+        status.lastSyncAt > 0 -> stringResource(R.string.sync_last, formatTime(status.lastSyncAt)) +
+            (status.lastWriter.takeIf { it.isNotBlank() }?.let { "  \u00b7  " + stringResource(R.string.sync_written_by, it) } ?: "")
+        else -> stringResource(R.string.sync_never)
+    }
+    SettingRow(stringResource(R.string.sync_now), statusText, enabled = !status.running, onClick = { manager.sync.sync(force = true) })
+    SettingRow(stringResource(R.string.sync_what), stringResource(R.string.sync_what_hint))
+    SettingRow(stringResource(R.string.sync_stop), stringResource(R.string.sync_stop_hint), onClick = onStop)
 }
 
 // ---- updates (Settings -> About) ----

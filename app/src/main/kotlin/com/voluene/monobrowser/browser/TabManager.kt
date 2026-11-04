@@ -800,6 +800,64 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         history.close()
     }
 
+    // --- Sync (a file in the user's cloud: Google Drive, OneDrive ...) ---
+
+    private fun <T> onMain(block: () -> T): T =
+        if (Looper.myLooper() == Looper.getMainLooper()) block()
+        else java.util.concurrent.FutureTask(block).also { mainHandler.post(it) }.get()
+
+    val sync = com.voluene.monobrowser.sync.SyncManager(
+        app, viewModelScope,
+        listOf(
+            object : com.voluene.monobrowser.sync.SyncSource {
+                override val name = "bookmarks"
+                override suspend fun read(): Map<String, String> {
+                    val (folders, bookmarks) = com.voluene.monobrowser.sync.BookmarkSync.toCollections(bookmarkFile.value)
+                    return folders.mapKeys { "f\u001E" + it.key } + bookmarks.mapKeys { "b\u001E" + it.key }
+                }
+                override suspend fun apply(merged: Map<String, String>) {
+                    val folders = merged.filterKeys { it.startsWith("f\u001E") }.mapKeys { it.key.removePrefix("f\u001E") }
+                    val bookmarks = merged.filterKeys { it.startsWith("b\u001E") }.mapKeys { it.key.removePrefix("b\u001E") }
+                    onMain { bookmarkFile.update { com.voluene.monobrowser.sync.BookmarkSync.fromCollections(it, folders, bookmarks, System.currentTimeMillis()) } }
+                }
+            },
+            object : com.voluene.monobrowser.sync.SyncSource {
+                override val name = "pinned"
+                override suspend fun read() = settingsFile.value.pinnedSites.associate { it.url to it.title }
+                override suspend fun apply(merged: Map<String, String>) = onMain {
+                    updateSettings { s ->
+                        val kept = s.pinnedSites.filter { it.url in merged }.map { it.copy(title = merged.getValue(it.url)) }
+                        val added = merged.filterKeys { url -> kept.none { it.url == url } }.map { (url, title) -> PinnedSite(url, title) }
+                        s.copy(pinnedSites = kept + added)
+                    }
+                }
+            },
+            object : com.voluene.monobrowser.sync.SyncSource {
+                override val name = "reading"
+                override suspend fun read() = readingList.snapshot()
+                override suspend fun apply(merged: Map<String, String>) = readingList.applySynced(merged)
+            },
+            object : com.voluene.monobrowser.sync.SyncSource {
+                override val name = "notes"
+                override suspend fun read() = notes.snapshot()
+                override suspend fun apply(merged: Map<String, String>) = notes.applySynced(merged)
+            },
+        ),
+        uri = { settingsFile.value.syncUri },
+    )
+
+    /** The user picked (or created) the sync file. */
+    fun useSyncFile(picked: Uri) {
+        if (!sync.adopt(picked)) return toast(R.string.sync_error_access)
+        updateSettings { it.copy(syncUri = picked.toString()) }
+        sync.sync(force = true)
+    }
+
+    fun stopSync() {
+        sync.release(settingsFile.value.syncUri)
+        updateSettings { it.copy(syncUri = "") }
+    }
+
     // --- Memory pressure ---
 
     /**
@@ -842,6 +900,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
      * (WebView.pauseTimers is process-wide) unless some tab plays media, and the visible tab is paused too.
      */
     fun onAppVisible(visible: Boolean) {
+        // Pick up what other devices changed when coming back (also at launch); send what changed here when leaving.
+        sync.sync(force = !visible)
         if (visible == appVisible) return
         appVisible = visible
         val active = webViews[_activeTabId.value]

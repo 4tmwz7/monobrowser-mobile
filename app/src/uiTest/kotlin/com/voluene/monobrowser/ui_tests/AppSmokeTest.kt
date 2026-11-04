@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextClearance
 import androidx.test.core.app.ApplicationProvider
 import com.voluene.monobrowser.browser.TabManager
 import com.voluene.monobrowser.ui.browser.BrowserScreen
@@ -105,6 +106,10 @@ class AppSmokeTest {
         save("settings_search")
         compose.onNodeWithText("Dark mode for websites").assertExists()
         org.junit.Assert.assertTrue(compose.onAllNodesWithText("Search engine").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithText("dark").performTextClearance()
+        compose.onNodeWithText("Search settings").performTextInput("sync")
+        save("settings_sync")
+        compose.onNodeWithText("Set up sync").assertExists()
     }
 
     @Test fun readingList() {

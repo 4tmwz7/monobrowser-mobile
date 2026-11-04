@@ -94,6 +94,24 @@ class ReadingList(private val dir: File, private val scope: CoroutineScope) {
         }
     }
 
+    /** Sync: url -> stored article JSON, for every saved article (blocking). */
+    fun snapshot(): Map<String, String> =
+        dir.listFiles { f -> f.isFile && f.name.endsWith(".json") }.orEmpty().mapNotNull { f ->
+            val text = runCatching { f.readText() }.getOrNull() ?: return@mapNotNull null
+            ReadingListCodec.decode(text)?.first?.url?.let { it to text }
+        }.toMap()
+
+    /** Sync: makes the list match [articles] (url -> article JSON; blocking). */
+    fun applySynced(articles: Map<String, String>) {
+        dir.mkdirs()
+        val current = snapshot()
+        articles.forEach { (url, text) ->
+            if (current[url] != text && ReadingListCodec.decode(text) != null) runCatching { writeTextAtomically(file(ReadingListCodec.idFor(url)), text) }
+        }
+        current.keys.filter { it !in articles }.forEach { file(ReadingListCodec.idFor(it)).delete() }
+        reload()
+    }
+
     /** Blocking read of a saved article (call off the main thread). */
     fun load(id: String): ReaderArticle? =
         if (!Regex("^[0-9a-f]{24}$").matches(id)) null

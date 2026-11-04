@@ -94,6 +94,8 @@ data class AppSettings(
     val pinnedSites: List<PinnedSite> = emptyList(),
     /** Remove utm_*, fbclid, gclid and similar trackers from links you open, copy and share. */
     val stripTracking: Boolean = true,
+    /** Sync file chosen by the user (a content:// URI with a persisted permission); empty = sync off. */
+    val syncUri: String = "",
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String

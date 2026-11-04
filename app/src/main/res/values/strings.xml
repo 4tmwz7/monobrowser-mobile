@@ -483,4 +483,26 @@
     <string name="downloads_count">%1$d downloads</string>
     <string name="downloads_progress">%1$s of %2$s</string>
     <string name="downloads_cancel">Cancel</string>
+    <string name="sync_section">Sync</string>
+    <string name="sync_setup">Set up sync</string>
+    <string name="sync_setup_hint">Bookmarks, pinned sites, reading list and notes in a file on Google Drive or another cloud</string>
+    <string name="sync_setup_text">MonoBrowser keeps a sync file in a place you choose: Google Drive, OneDrive, Dropbox, Nextcloud or this device. On your first device create a new file; on the others choose that same file.</string>
+    <string name="sync_create">Create a new sync file</string>
+    <string name="sync_choose">Use an existing sync file</string>
+    <string name="sync_desktop_hint">With Google Drive for desktop, the same file in your Drive folder can be used by MonoBrowser on a computer.</string>
+    <string name="sync_file">Sync file</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_running">Syncing…</string>
+    <string name="sync_never">Not synced yet</string>
+    <string name="sync_last">Last synced %1$s</string>
+    <string name="sync_written_by">file written by %1$s</string>
+    <string name="sync_what">What is synced</string>
+    <string name="sync_what_hint">Bookmarks and folders, pinned sites, reading list (readable offline), notes. Syncs when you open and leave the app.</string>
+    <string name="sync_stop">Stop syncing</string>
+    <string name="sync_stop_hint">The file and the data on this device stay as they are</string>
+    <string name="sync_stop_message">This device stops reading and writing the sync file. Nothing is deleted.</string>
+    <string name="sync_stop_confirm">Stop</string>
+    <string name="sync_error_access">No access to the sync file any more. Stop syncing and choose it again.</string>
+    <string name="sync_error_format">This file is not a MonoBrowser sync file.</string>
+    <string name="sync_error_io">Could not read or write the sync file (offline?). It will be tried again.</string>
 </resources>

@@ -56,6 +56,7 @@ Browsing
 - Read aloud keeps going after reader view closes and is a regular media session: controls in the notification, on the lock screen, in Samsung's Now Bar (One UI 7+) and on a paired watch (Galaxy Watch media controls)
 - Audio / video playing in pages becomes a regular media session like a music app's: cover (the page's media artwork or og:image), title, artist, previous / play-pause / next / stop, seek bar; in the notification, on the lock screen, in Now Bar and on a paired watch; keeps playing in the background (private tabs: no title or cover on the lock screen)
 - Android 16+: download progress as a Live Update (progress bar and percentage chip, shown by One UI in the Now Bar)
+- Sync through a file in your cloud (Google Drive, OneDrive, Dropbox, Nextcloud ...), no account setup: bookmarks with folders, pinned sites, reading list (readable offline) and notes; three-way merge with deletion records, on open / leave of the app and on demand
 - Home screen search widget (search bar + private tab)
 - Tracking parameters (utm_*, fbclid, gclid ...) are removed from links you open, copy and share
 - Desktop site per tab, page text size, pinch-to-zoom, print / save as PDF, full screen video
@@ -92,6 +93,22 @@ Performance
 - Tabs that are not on screen are paused and their renderers deprioritised; in the background JavaScript timers stop - unless a page plays media
 - Load progress and blocked-request counts do not recompose the whole UI; palette search keeps a per-list index (well under 1 ms per keystroke over thousands of bookmarks)
 - Baseline profile for the app's own code; bookmarks load off the main thread at startup
+
+## Sync file format
+
+`monobrowser-sync.json` is plain JSON, so other MonoBrowser builds (desktop, e.g. through Google Drive for desktop) can share it:
+
+```json
+{"format": "monobrowser-sync", "version": 1, "updatedAt": 1730000000000, "updatedBy": "Samsung SM-S921B",
+ "collections": {
+   "bookmarks": {"f\u001EWork": {"v": "", "t": 1730000000000},
+                 "b\u001EWork\u001F\u001Fhttps://kotlinlang.org/": {"v": "Kotlin", "t": 1730000000000}},
+   "pinned":    {"https://github.com/": {"v": "GitHub", "t": 1730000000000}},
+   "reading":   {"https://example.com/a": {"v": "<saved article JSON>", "t": 1730000000000}},
+   "notes":     {"n-abc123": {"v": "# Markdown text", "t": 1730000000000}}}}
+```
+
+Every entry is `{v: value, t: last change (epoch ms)}`; `v: null` records a deletion (kept 90 days). Bookmark keys are the folder path (names joined by U+001F) and, for bookmarks, U+001F U+001F and the URL; folder keys start with `f` + U+001E, bookmark keys with `b` + U+001E. Each device keeps the state of its last sync and merges three-way: its own changes since then win, everything else comes from the file.
 
 ## Status
 

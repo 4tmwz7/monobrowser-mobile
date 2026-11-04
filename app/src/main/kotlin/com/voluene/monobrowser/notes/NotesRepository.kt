@@ -121,6 +121,20 @@ class NotesRepository(
         return id
     }
 
+    /** Sync: every non-blank note (id -> text), pending edits included (blocking). */
+    fun snapshot(): Map<String, String> {
+        flush()
+        return store.list().mapNotNull { meta -> store.read(meta.id)?.takeIf { it.isNotBlank() }?.let { meta.id to it } }.toMap()
+    }
+
+    /** Sync: makes the notes match [notes] (blocking). A blank note being written right now is never removed. */
+    fun applySynced(notes: Map<String, String>) {
+        flush()
+        notes.forEach { (id, text) -> if (store.isValidId(id) && store.read(id) != text) store.write(id, text) }
+        store.list().forEach { meta -> if (meta.id !in notes && !store.read(meta.id).isNullOrBlank()) store.delete(meta.id) }
+        _notes.value = store.list()
+    }
+
     fun titleOf(id: String): String = _notes.value.firstOrNull { it.id == id }?.title.orEmpty()
 
     private fun metaFor(id: String, text: String) =
