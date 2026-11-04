@@ -70,6 +70,8 @@ fun FloatingVideo(
     onExpand: () -> Unit,
     onPlayPause: () -> Unit,
     onClose: () -> Unit,
+    /** In the picture-in-picture window: show the whole page at this size, made small (null = the video only). */
+    pageSize: androidx.compose.ui.unit.DpSize? = null,
 ) {
     val frame: @Composable (Modifier) -> Unit = { modifier ->
         AndroidView(
@@ -86,7 +88,7 @@ fun FloatingVideo(
         )
     }
     if (fill) {
-        frame(Modifier.fillMaxSize())
+        frame(if (pageSize != null) Modifier.scaledPage(pageSize).fillMaxSize() else Modifier.fillMaxSize())
         return
     }
     val density = LocalDensity.current

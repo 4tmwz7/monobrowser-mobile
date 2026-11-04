@@ -79,7 +79,7 @@ fun PredictiveBackContainer(
             Box(
                 Modifier.fillMaxSize().drawBehind {
                     val p = progress.value
-                    if (p > 0f) drawRect(Color.Black.copy(alpha = 0.35f * p))
+                    if (p > 0f) drawRect(Color.Black.copy(alpha = 0.55f * p))
                 },
             )
         }
@@ -115,11 +115,12 @@ object BackGesture {
     /** Decelerating: the first part of the swipe already shows a clear response. */
     fun ease(progress: Float): Float {
         val p = progress.coerceIn(0f, 1f)
-        return 1f - (1f - p) * (1f - p)
+        // Cubic: a short swipe already lifts the page clearly (One UI reports small progress values).
+        return 1f - (1f - p) * (1f - p) * (1f - p)
     }
 
-    /** 100 % -> 90 %, like the system's cross-activity animation. */
-    fun scale(progress: Float): Float = 1f - 0.1f * progress.coerceIn(0f, 1f)
+    /** 100 % -> 82 %: the page clearly lifts off what is underneath. */
+    fun scale(progress: Float): Float = 1f - 0.18f * progress.coerceIn(0f, 1f)
 
     /**
      * Vertical offset (px) for a finger that moved [dy] px since the gesture started: follows it with resistance,
@@ -127,12 +128,12 @@ object BackGesture {
      */
     fun follow(dy: Float, height: Float): Float {
         if (height <= 0f) return 0f
-        val max = height / 20f
+        val max = height / 12f
         val x = (dy / height).coerceIn(-1f, 1f)
         // Decelerating: quick response to small moves, never past [max].
         return max * kotlin.math.sign(x) * (1f - (1f - kotlin.math.abs(x)) * (1f - kotlin.math.abs(x)))
     }
 
     /** Horizontal shift as a fraction of the width, away from the swiping edge. */
-    fun shift(progress: Float): Float = 0.05f * progress.coerceIn(0f, 1f)
+    fun shift(progress: Float): Float = 0.1f * progress.coerceIn(0f, 1f)
 }

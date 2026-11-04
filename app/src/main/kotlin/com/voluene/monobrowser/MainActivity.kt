@@ -90,9 +90,13 @@ class MainActivity : ComponentActivity(), ActivityHost {
         // Floating video window: kept in step with what plays, so the system can shrink the app into it smoothly
         // (Android 12+ enters it by itself on the home gesture; older versions on onUserLeaveHint).
         lifecycleScope.launch {
-            kotlinx.coroutines.flow.combine((application as MonoApp).webMedia.state, tabManager.settings.map { it.autoPictureInPicture }, tabManager.activeTabId) { _, auto, _ ->
+            kotlinx.coroutines.flow.combine(
+                (application as MonoApp).webMedia.state, tabManager.settings.map { it.autoPictureInPicture to it.pipWholePage },
+                tabManager.activeTabId, tabManager.floating,
+            ) { _, options, _, _ ->
                 // Only what the window depends on (position reports every few seconds change nothing here).
-                tabManager.pictureInPictureVideo(requirePlaying = false)?.let { listOf(it.playing, it.videoWidth, it.videoHeight) } to auto
+                tabManager.pictureInPictureVideo(requirePlaying = false)
+                    ?.let { listOf(it.playing, it.videoWidth, it.videoHeight, it.durationMs > 0, it.canNext || it.canPrevious) } to options
             }.distinctUntilChanged().collect { updatePictureInPicture() }
         }
         setContent {
@@ -110,10 +114,33 @@ class MainActivity : ComponentActivity(), ActivityHost {
         val canEnter = video?.playing == true
         val builder = android.app.PictureInPictureParams.Builder()
         if (video != null) {
-            // The system accepts 1:2.39 .. 2.39:1.
-            val ratio = PictureInPicture.ratio(video.videoWidth, video.videoHeight)
+            // The whole page made small has the screen's shape; the video alone its own. (1:2.39 .. 2.39:1 allowed.)
+            val wholePage = tabManager.settings.value.pipWholePage
+            val decor = window.decorView
+            val ratio = if (wholePage && !isInPictureInPictureMode && decor.width > 0) {
+                PictureInPicture.ratio(decor.width, decor.height).also { pageRatio = it }
+            } else if (wholePage) {
+                pageRatio ?: PictureInPicture.ratio(9, 19)
+            } else {
+                PictureInPicture.ratio(video.videoWidth, video.videoHeight)
+            }
             builder.setAspectRatio(android.util.Rational(ratio.first, ratio.second))
-            builder.setActions(listOf(pictureInPictureAction(video.playing)))
+            // Like a media app: seek back / play-pause / seek forward, or previous / next track for playlists.
+            val media = com.voluene.monobrowser.media.MediaPlaybackService
+            val actions = when {
+                video.durationMs > 0 -> listOf(
+                    pictureInPictureAction(media.ACTION_REWIND, R.string.media_rewind, android.R.drawable.ic_media_rew, 13),
+                    playPauseAction(video.playing),
+                    pictureInPictureAction(media.ACTION_FORWARD, R.string.media_forward, android.R.drawable.ic_media_ff, 14),
+                )
+                video.canNext || video.canPrevious -> listOf(
+                    pictureInPictureAction(media.ACTION_PREVIOUS, R.string.media_previous, android.R.drawable.ic_media_previous, 15),
+                    playPauseAction(video.playing),
+                    pictureInPictureAction(media.ACTION_NEXT, R.string.media_next, android.R.drawable.ic_media_next, 16),
+                )
+                else -> listOf(playPauseAction(video.playing))
+            }
+            builder.setActions(actions.take(maxOf(1, runCatching { maxNumPictureInPictureActions }.getOrDefault(3))))
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setAutoEnterEnabled(canEnter && tabManager.settings.value.autoPictureInPicture)
@@ -122,16 +149,24 @@ class MainActivity : ComponentActivity(), ActivityHost {
         return builder.build()
     }
 
+    /** The window's shape while it shows the whole page (measured before the window shrank). */
+    private var pageRatio: Pair<Int, Int>? = null
+
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
-    private fun pictureInPictureAction(playing: Boolean): android.app.RemoteAction {
-        val action = if (playing) com.voluene.monobrowser.media.MediaPlaybackService.ACTION_PAUSE else com.voluene.monobrowser.media.MediaPlaybackService.ACTION_PLAY
+    private fun playPauseAction(playing: Boolean): android.app.RemoteAction {
+        val media = com.voluene.monobrowser.media.MediaPlaybackService
+        return if (playing) pictureInPictureAction(media.ACTION_PAUSE, R.string.media_pause, android.R.drawable.ic_media_pause, 11)
+        else pictureInPictureAction(media.ACTION_PLAY, R.string.media_play, android.R.drawable.ic_media_play, 12)
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+    private fun pictureInPictureAction(action: String, label: Int, icon: Int, request: Int): android.app.RemoteAction {
         val intent = android.app.PendingIntent.getService(
-            this, if (playing) 11 else 12, Intent(this, WebMediaService::class.java).setAction(action),
+            this, request, Intent(this, WebMediaService::class.java).setAction(action),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val label = getString(if (playing) R.string.media_pause else R.string.media_play)
-        val icon = android.graphics.drawable.Icon.createWithResource(this, if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
-        return android.app.RemoteAction(icon, label, label, intent)
+        val text = getString(label)
+        return android.app.RemoteAction(android.graphics.drawable.Icon.createWithResource(this, icon), text, text, intent)
     }
 
     private fun updatePictureInPicture() {

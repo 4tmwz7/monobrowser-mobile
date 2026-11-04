@@ -512,4 +512,8 @@
     <string name="menu_more">More</string>
     <string name="menu_less">Less</string>
     <string name="floating_expand">Back to the tab</string>
+    <string name="media_rewind">Back 10 s</string>
+    <string name="media_forward">Forward 10 s</string>
+    <string name="settings_pip_page">Whole page in the video window</string>
+    <string name="settings_pip_page_hint">The floating window shows the site made small, with its own player controls. Off: only the video.</string>
 </resources>

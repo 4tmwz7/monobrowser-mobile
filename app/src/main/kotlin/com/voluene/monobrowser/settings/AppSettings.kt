@@ -96,6 +96,8 @@ data class AppSettings(
     val stripTracking: Boolean = true,
     /** Leaving the app while a video plays in the current tab shrinks it into a floating window (picture in picture). */
     val autoPictureInPicture: Boolean = true,
+    /** The picture-in-picture window shows the whole page made small (with the site's own player controls); off = only the video. */
+    val pipWholePage: Boolean = true,
     /** Sync file chosen by the user (a content:// URI with a persisted permission); empty = sync off. */
     val syncUri: String = "",
 ) {

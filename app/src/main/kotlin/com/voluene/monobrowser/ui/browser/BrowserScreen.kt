@@ -146,6 +146,12 @@ fun BrowserScreen(manager: TabManager) {
     // Floating video window: only the page (whose video fills it) is shown, no bars, sheets or dialogs.
     val pip by manager.pictureInPicture.collectAsState()
     val floatingId by manager.floating.collectAsState()
+    // The page's size on the screen, kept from before the app became a picture-in-picture window (which then
+    // shows the page at this size, made small).
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val pageSizeHolder = remember { arrayOf(androidx.compose.ui.unit.DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)) }
+    if (!pip) pageSizeHolder[0] = androidx.compose.ui.unit.DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
+    val pipPage = if (pip && settings.pipWholePage) pageSizeHolder[0] else null
     val media by manager.mediaState.collectAsState()
     // Not read here (only inside the progress lines' draw phase): load steps do not recompose this screen.
     val loadProgress = manager.loadProgress.collectAsState()
@@ -474,6 +480,7 @@ fun BrowserScreen(manager: TabManager) {
                     webView = manager.webViewFor(tab.id),
                     onRefresh = { manager.reload(tab.id) },
                     lineAtBottom = !toolbarTop,
+                    modifier = if (pipPage != null && floatingId == null) Modifier.scaledPage(pipPage) else Modifier,
                 )
                 if (showStart) {
                     StartPage(
@@ -756,6 +763,7 @@ fun BrowserScreen(manager: TabManager) {
                     onExpand = manager::expandFloating,
                     onPlayPause = { manager.togglePlayback(id) },
                     onClose = manager::closeFloating,
+                    pageSize = pipPage,
                 )
             }
         }

@@ -55,9 +55,9 @@ class ModalScope internal constructor(
         val p = back.value
         if (p == 0f) return@graphicsLayer
         transformOrigin = TransformOrigin(0.5f, 1f)
-        scaleX = 1f - 0.1f * p
-        scaleY = 1f - 0.06f * p
-        translationY = p * 16.dp.toPx()
+        scaleX = 1f - 0.16f * p
+        scaleY = 1f - 0.1f * p
+        translationY = p * 40.dp.toPx()
     }
 
     /** Centered dialog: grows in with a soft spring, shrinks and fades out. */
@@ -69,8 +69,9 @@ class ModalScope internal constructor(
     }.graphicsLayer {
         val p = back.value
         if (p == 0f) return@graphicsLayer
-        scaleX = 1f - 0.1f * p
-        scaleY = 1f - 0.1f * p
+        scaleX = 1f - 0.16f * p
+        scaleY = 1f - 0.16f * p
+        alpha = 1f - 0.3f * p
     }
 
     /** Items of a sheet or list arriving one after another ([index] from the top, small delay each). */

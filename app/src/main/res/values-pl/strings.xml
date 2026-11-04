@@ -512,4 +512,8 @@
     <string name="menu_more">Więcej</string>
     <string name="menu_less">Mniej</string>
     <string name="floating_expand">Wróć do karty</string>
+    <string name="media_rewind">10 s do tyłu</string>
+    <string name="media_forward">10 s do przodu</string>
+    <string name="settings_pip_page">Cała strona w okienku wideo</string>
+    <string name="settings_pip_page_hint">Okienko pokazuje pomniejszoną stronę z jej własnymi kontrolkami odtwarzacza. Wyłączone: samo wideo.</string>
 </resources>

@@ -35,7 +35,11 @@ data class MediaInfo(
     /** elapsedRealtime of [positionMs]; 0 = now. */
     val updatedAt: Long = 0,
     val canSeek: Boolean = false,
-)
+) {
+    /** Where playback is now: [positionMs] moved on by the time since [updatedAt] while playing. */
+    fun currentPositionMs(now: Long = android.os.SystemClock.elapsedRealtime()): Long =
+        if (!playing || updatedAt <= 0) positionMs else positionMs + ((now - updatedAt).coerceAtLeast(0) * rate).toLong()
+}
 
 /**
  * Something that plays: read aloud, or media in a web page. Commands come from the notification, the lock
@@ -98,6 +102,11 @@ abstract class MediaPlaybackService : Service() {
             ACTION_NEXT -> source.skip(forward = true)
             ACTION_PREVIOUS -> source.skip(forward = false)
             ACTION_STOP -> source.stop()
+            ACTION_REWIND, ACTION_FORWARD -> source.current()?.takeIf { it.canSeek }?.let { info ->
+                val step = if (intent.action == ACTION_FORWARD) SEEK_STEP_MS else -SEEK_STEP_MS
+                val target = (info.currentPositionMs() + step).coerceIn(0, info.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE)
+                source.seekTo(target)
+            }
         }
         // A foreground service must show its notification right away.
         render(source.current(), force = true)
@@ -202,5 +211,8 @@ abstract class MediaPlaybackService : Service() {
         const val ACTION_NEXT = "com.voluene.monobrowser.media.NEXT"
         const val ACTION_PREVIOUS = "com.voluene.monobrowser.media.PREVIOUS"
         const val ACTION_STOP = "com.voluene.monobrowser.media.STOP"
+        const val ACTION_REWIND = "com.voluene.monobrowser.media.REWIND"
+        const val ACTION_FORWARD = "com.voluene.monobrowser.media.FORWARD"
+        const val SEEK_STEP_MS = 10_000L
     }
 }

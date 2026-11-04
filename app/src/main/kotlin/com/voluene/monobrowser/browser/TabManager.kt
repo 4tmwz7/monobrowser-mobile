@@ -1726,9 +1726,15 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         _pictureInPicture.value = active
         guardPlayback(active || !appVisible)
         val tabId = webMedia.state.value?.tabId ?: _activeTabId.value
-        // A page element already in full screen is shown as it is; the floating window keeps its video filled.
+        // A page element already in full screen is shown as it is.
         if (active && _fullScreen.value != null) return
-        if (tabId == _floating.value) return
+        val wholePage = settingsFile.value.pipWholePage
+        if (tabId == _floating.value) {
+            // The floating window shows only the video; the system window shows the whole page when so set.
+            if (wholePage) webViews[tabId]?.let { runCatching { it.evaluateJavascript("window.__monoPip && window.__monoPip(${!active})", null) } }
+            return
+        }
+        if (wholePage) return
         webViews[tabId]?.let { runCatching { it.evaluateJavascript("window.__monoPip && window.__monoPip($active)", null) } }
     }
 

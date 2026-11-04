@@ -231,6 +231,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             SettingRow(stringResource(R.string.settings_exceptions), stringResource(R.string.settings_exceptions_count, exceptions.size), onClick = { open(Page.Exceptions) })
             SettingRow(stringResource(R.string.settings_permissions), stringResource(R.string.settings_permissions_hint), onClick = { open(Page.Permissions) })
             SwitchRow(stringResource(R.string.settings_pip), stringResource(R.string.settings_pip_hint), settings.autoPictureInPicture) { v -> update { it.copy(autoPictureInPicture = v) } }
+            SwitchRow(stringResource(R.string.settings_pip_page), stringResource(R.string.settings_pip_page_hint), settings.pipWholePage) { v -> update { it.copy(pipWholePage = v) } }
             SwitchRow(stringResource(R.string.settings_strip_tracking), stringResource(R.string.settings_strip_tracking_hint), settings.stripTracking) { v -> update { it.copy(stripTracking = v) } }
             SettingRow(stringResource(R.string.settings_clear_data), stringResource(R.string.settings_clear_data_hint), onClick = { clearDialog = true })
 
