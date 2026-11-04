@@ -53,6 +53,9 @@ Browsing
 - Search suggestions (Google, DuckDuckGo, Bing, Ecosia; never in private tabs), recent pages in the empty palette; also Brave Search and Startpage
 - Reader view (article text only; text size, serif/sans; offered in the address bar on article pages), read aloud (text-to-speech, page language, speed), and a reading list saved for offline reading
 - Translate page (Google Translate, into the phone's language)
+- Read aloud keeps going after reader view closes and is a regular media session: controls in the notification, on the lock screen, in Samsung's Now Bar (One UI 7+) and on a paired watch (Galaxy Watch media controls)
+- Home screen search widget (search bar + private tab)
+- Tracking parameters (utm_*, fbclid, gclid ...) are removed from links you open, copy and share
 - Desktop site per tab, page text size, pinch-to-zoom, print / save as PDF, full screen video
 - `target=_blank` / `window.open` open new tabs (pop-ups without a tap are blocked)
 - `blob:` downloads (generated files); messages with actions ("Downloaded x · Open", "Undo", "Switch")

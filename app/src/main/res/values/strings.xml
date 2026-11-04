@@ -473,4 +473,7 @@
     <string name="widget_description">Search or enter an address, or open a private tab, from the home screen</string>
     <string name="settings_strip_tracking">Remove tracking from links</string>
     <string name="settings_strip_tracking_hint">utm_*, fbclid, gclid and similar are dropped from links you open, copy and share</string>
+    <string name="read_aloud_next">Next paragraph</string>
+    <string name="read_aloud_previous">Previous paragraph</string>
+    <string name="read_aloud_stop">Stop reading</string>
 </resources>

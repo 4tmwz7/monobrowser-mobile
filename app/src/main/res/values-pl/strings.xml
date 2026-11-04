@@ -473,4 +473,7 @@
     <string name="widget_description">Szukaj lub wpisz adres albo otwórz kartę prywatną z ekranu głównego</string>
     <string name="settings_strip_tracking">Usuwaj śledzenie z linków</string>
     <string name="settings_strip_tracking_hint">utm_*, fbclid, gclid i podobne znikają z linków, które otwierasz, kopiujesz i udostępniasz</string>
+    <string name="read_aloud_next">Następny akapit</string>
+    <string name="read_aloud_previous">Poprzedni akapit</string>
+    <string name="read_aloud_stop">Zatrzymaj czytanie</string>
 </resources>

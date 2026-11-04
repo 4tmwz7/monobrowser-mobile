@@ -551,17 +551,25 @@ fun BrowserScreen(manager: TabManager) {
                 onClose = { overlay = Overlay.None },
             )
             Overlay.Reader -> readerArticle?.let { article ->
-                // The speech engine starts on the first "read aloud" and shuts down with the reader.
-                var speech by remember(article) { mutableStateOf<com.voluene.monobrowser.reader.ReadAloud?>(null) }
-                androidx.compose.runtime.DisposableEffect(article) { onDispose { speech?.shutdown() } }
-                val speechState = speech?.state?.collectAsState()?.value ?: com.voluene.monobrowser.reader.ReadAloudState()
+                // One player for the whole app: reading goes on after the reader closes (media notification, Now Bar,
+                // lock screen, watch). The reader shows its state only for the article it is reading.
+                val player = (context.applicationContext as com.voluene.monobrowser.MonoApp).readAloud
+                val playerState by player.state.collectAsState()
+                val forThis = playerState.articleUrl == article.url
+                val speechState = if (forThis) playerState
+                    else com.voluene.monobrowser.reader.ReadAloudState(rate = playerState.rate, available = playerState.available)
                 ReaderScreen(
                     readAloud = speechState,
                     onPlayPause = {
-                        val engine = speech ?: com.voluene.monobrowser.reader.ReadAloud(context).also { speech = it }
-                        if (speechState.speaking) engine.pause() else engine.play(article, engine.resumeFrom)
+                        // Android 13+: the media controls are a notification, which needs the permission.
+                        if (android.os.Build.VERSION.SDK_INT >= 33) manager.host?.requestPermissions(listOf(android.Manifest.permission.POST_NOTIFICATIONS)) {}
+                        when {
+                            forThis && playerState.speaking -> player.pause()
+                            forThis && !playerState.finished -> player.play(article, player.resumeFrom)
+                            else -> player.play(article, 0)
+                        }
                     },
-                    onRate = { (speech ?: com.voluene.monobrowser.reader.ReadAloud(context).also { speech = it }).cycleRate(article) },
+                    onRate = { player.cycleRate(article) },
                     article = article,
                     fontSize = settings.readerFontSize,
                     serif = settings.readerSerif,

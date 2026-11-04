@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Public Downloads folder needs this only before Android 10. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- Read aloud: media playback service with its notification (lock screen, Now Bar, watch controls). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -77,6 +81,12 @@
         </activity>
 
         <receiver android:name=".update.InstallReceiver" android:exported="false" />
+
+        <!-- Read aloud as media playback (notification, lock screen, Now Bar, Galaxy Watch media controls). -->
+        <service
+            android:name=".ReadAloudService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- Home screen search bar widget. -->
         <receiver

@@ -9,14 +9,30 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 
 /** Where read-aloud is: [block] is the article block being spoken (-1 = none). */
-data class ReadAloudState(val speaking: Boolean = false, val block: Int = -1, val rate: Float = 1f, val available: Boolean = true)
+data class ReadAloudState(
+    val speaking: Boolean = false,
+    val block: Int = -1,
+    val rate: Float = 1f,
+    val available: Boolean = true,
+    /** The article being read (null = nothing loaded); title / site feed the media notification and Now Bar. */
+    val articleUrl: String? = null,
+    val title: String = "",
+    val site: String = "",
+    /** Read to the end. */
+    val finished: Boolean = false,
+)
 
 /**
  * Reader view's "read aloud": the system TextToSpeech engine speaks the article block by block (offline voices
  * where installed), in the page's language when the engine has it. The current block is published so the
- * reader can highlight it and scroll along. Call [shutdown] when the reader closes.
+ * reader can highlight it and scroll along. One instance per process (MonoApp): reading goes on after the
+ * reader closes, controlled from the media notification, the lock screen, Samsung's Now Bar or a watch
+ * (ReadAloudService publishes it as a media session).
  */
 class ReadAloud(context: Context) {
+    private val app = context.applicationContext
+    private var current: ReaderArticle? = null
+
     private val _state = MutableStateFlow(ReadAloudState())
     val state: StateFlow<ReadAloudState> = _state.asStateFlow()
 
@@ -38,7 +54,7 @@ class ReadAloud(context: Context) {
             }
 
             override fun onDone(utteranceId: String) {
-                if (utteranceId.endsWith(LAST)) _state.value = _state.value.copy(speaking = false, block = -1)
+                if (utteranceId.endsWith(LAST)) _state.value = _state.value.copy(speaking = false, block = -1, finished = true)
             }
 
             @Deprecated("Deprecated in Java")
@@ -48,8 +64,13 @@ class ReadAloud(context: Context) {
         })
     }
 
-    /** Speaks [article] from block [from] on. */
+    /** Speaks [article] from block [from] on (and shows the media controls). */
     fun play(article: ReaderArticle, from: Int = 0) {
+        current = article
+        _state.value = _state.value.copy(articleUrl = article.url, title = article.title, site = article.site, finished = false)
+        runCatching {
+            androidx.core.content.ContextCompat.startForegroundService(app, android.content.Intent(app, com.voluene.monobrowser.ReadAloudService::class.java))
+        }
         val start = {
             tts.language = pickLocale(article.language)
             tts.setSpeechRate(_state.value.rate)
@@ -72,6 +93,27 @@ class ReadAloud(context: Context) {
     }
 
     val resumeFrom: Int get() = _state.value.block.coerceAtLeast(0)
+
+    /** Continues the loaded article where it paused. */
+    fun resume() {
+        current?.let { play(it, resumeFrom) }
+    }
+
+    /** Next / previous paragraph (headings and list items count; code is skipped). */
+    fun skip(forward: Boolean) {
+        val article = current ?: return
+        val blocks = Speech.chunks(article, Int.MAX_VALUE).map { it.first }.distinct()
+        val at = _state.value.block.coerceAtLeast(0)
+        val target = if (forward) blocks.firstOrNull { it > at } else blocks.lastOrNull { it < at }
+        if (target != null) play(article, target) else if (!forward) play(article, 0)
+    }
+
+    /** Stops and forgets the article (the media controls go away). */
+    fun stop() {
+        current = null
+        runCatching { tts.stop() }
+        _state.value = ReadAloudState(rate = _state.value.rate, available = _state.value.available)
+    }
 
     /** 0.8x -> 1x -> 1.25x -> 1.5x -> 0.8x; applies from the next block on (the engine reads rates per call). */
     fun cycleRate(article: ReaderArticle) {
