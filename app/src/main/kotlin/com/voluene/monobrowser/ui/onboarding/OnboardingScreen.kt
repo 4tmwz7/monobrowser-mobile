@@ -50,7 +50,7 @@ import com.voluene.monobrowser.ui.common.MonoButton
 
 /** Pure step arithmetic (desktop `onboarding.ts`: clampStep / nextStep / prevStep / isLastStep). */
 object OnboardingSteps {
-    const val COUNT = 4 // welcome, search engine, toolbar position, default browser
+    const val COUNT = 5 // welcome, search engine, toolbar position, gestures, default browser
     fun clamp(index: Int) = index.coerceIn(0, COUNT - 1)
     fun next(index: Int) = minOf(COUNT - 1, index + 1)
     fun prev(index: Int) = maxOf(0, index - 1)
@@ -129,6 +129,10 @@ fun OnboardingScreen(settings: AppSettings, onChange: ((AppSettings) -> AppSetti
                     Text(stringResource(R.string.onboarding_toolbar_text), color = scheme.onBackground, fontSize = 15.sp)
                     Choice(stringResource(R.string.settings_toolbar_bottom), stringResource(R.string.onboarding_toolbar_bottom_hint), settings.toolbarPosition == ToolbarPosition.BOTTOM) { onChange { it.copy(toolbarPosition = ToolbarPosition.BOTTOM) } }
                     Choice(stringResource(R.string.settings_toolbar_top), stringResource(R.string.onboarding_toolbar_top_hint), settings.toolbarPosition == ToolbarPosition.TOP) { onChange { it.copy(toolbarPosition = ToolbarPosition.TOP) } }
+                }
+                3 -> {
+                    Heading(R.string.tips_title)
+                    GestureTips()
                 }
                 else -> {
                     Heading(R.string.onboarding_default_heading)

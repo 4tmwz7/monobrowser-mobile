@@ -447,4 +447,26 @@
     <string name="menu_translate">Translate page</string>
     <string name="translate_page">Translate page</string>
     <string name="settings_search">Search settings</string>
+    <string name="tips_title">Gestures and shortcuts</string>
+    <string name="tips_hint">Swipes and long presses that save time</string>
+    <string name="tip_swipe_bar">Swipe the address bar sideways</string>
+    <string name="tip_swipe_bar_text">Switch to the next or previous tab.</string>
+    <string name="tip_swipe_up">Swipe the address bar up</string>
+    <string name="tip_swipe_up_text">Open all tabs (swipe down when the bar is at the top).</string>
+    <string name="tip_counter">Long-press the tab counter</string>
+    <string name="tip_counter_text">Open a new tab.</string>
+    <string name="tip_back_hold">Long-press back or forward</string>
+    <string name="tip_back_hold_text">Jump several pages in the tab\'s history.</string>
+    <string name="tip_address_hold">Long-press the address</string>
+    <string name="tip_address_hold_text">Copy, paste and go, pin to the start page, translate, share.</string>
+    <string name="tip_lock">Tap the lock</string>
+    <string name="tip_lock_text">Site information: connection, ad blocker, desktop site, permissions.</string>
+    <string name="tip_link_hold">Long-press a link</string>
+    <string name="tip_link_hold_text">Preview it without leaving the page (Glance), or open the link menu.</string>
+    <string name="tip_swipe_tab">Swipe a tab in the tab grid</string>
+    <string name="tip_swipe_tab_text">Close it (Undo brings it back).</string>
+    <string name="tip_back">Back</string>
+    <string name="tip_back_text">Closes what is open; on a tab opened from a link it returns to the tab it came from.</string>
+    <string name="tip_pull">Pull down at the top of a page</string>
+    <string name="tip_pull_text">Reload.</string>
 </resources>

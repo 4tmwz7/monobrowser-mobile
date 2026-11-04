@@ -447,4 +447,26 @@
     <string name="menu_translate">Przetłumacz stronę</string>
     <string name="translate_page">Przetłumacz stronę</string>
     <string name="settings_search">Szukaj w ustawieniach</string>
+    <string name="tips_title">Gesty i skróty</string>
+    <string name="tips_hint">Przesunięcia i przytrzymania, które oszczędzają czas</string>
+    <string name="tip_swipe_bar">Przesuń pasek adresu w bok</string>
+    <string name="tip_swipe_bar_text">Przejdź do następnej lub poprzedniej karty.</string>
+    <string name="tip_swipe_up">Przesuń pasek adresu w górę</string>
+    <string name="tip_swipe_up_text">Otwórz wszystkie karty (w dół, gdy pasek jest u góry).</string>
+    <string name="tip_counter">Przytrzymaj licznik kart</string>
+    <string name="tip_counter_text">Otwórz nową kartę.</string>
+    <string name="tip_back_hold">Przytrzymaj wstecz lub dalej</string>
+    <string name="tip_back_hold_text">Przeskocz kilka stron w historii karty.</string>
+    <string name="tip_address_hold">Przytrzymaj adres</string>
+    <string name="tip_address_hold_text">Kopiuj, wklej i przejdź, przypnij do strony startowej, przetłumacz, udostępnij.</string>
+    <string name="tip_lock">Dotknij kłódki</string>
+    <string name="tip_lock_text">Informacje o stronie: połączenie, bloker reklam, wersja na komputer, uprawnienia.</string>
+    <string name="tip_link_hold">Przytrzymaj link</string>
+    <string name="tip_link_hold_text">Podejrzyj go bez opuszczania strony (Glance) albo otwórz menu linku.</string>
+    <string name="tip_swipe_tab">Przesuń kartę w siatce kart</string>
+    <string name="tip_swipe_tab_text">Zamknij ją („Cofnij” ją przywraca).</string>
+    <string name="tip_back">Wstecz</string>
+    <string name="tip_back_text">Zamyka to, co otwarte; w karcie otwartej z linku wraca do karty źródłowej.</string>
+    <string name="tip_pull">Pociągnij w dół na górze strony</string>
+    <string name="tip_pull_text">Odśwież.</string>
 </resources>

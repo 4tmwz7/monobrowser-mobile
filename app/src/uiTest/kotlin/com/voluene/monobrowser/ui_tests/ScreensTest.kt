@@ -283,5 +283,11 @@ class ScreensTest {
         }
     }
 
+    @Test fun tips() = shot("tips") {
+        com.voluene.monobrowser.ui.common.ScreenScaffold("Gestures and shortcuts", {}) {
+            com.voluene.monobrowser.ui.onboarding.GestureTips(Modifier.padding(20.dp))
+        }
+    }
+
     @Test fun textSize() = shot("text_size") { browser(Tab(1, url = "https://example.com/")) { TextSizeDialog(115, {}, {}) } }
 }

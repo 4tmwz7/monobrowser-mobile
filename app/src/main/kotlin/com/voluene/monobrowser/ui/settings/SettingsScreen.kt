@@ -79,7 +79,7 @@ internal fun settingMatches(query: String, title: String, subtitle: String?): Bo
     return com.voluene.monobrowser.ui.palette.PaletteEngine.fold(query).split(' ').filter { it.isNotBlank() }.all { haystack.contains(it) }
 }
 
-private enum class Page { Main, Theme, Exceptions, Permissions, Licenses }
+private enum class Page { Main, Theme, Exceptions, Permissions, Licenses, Tips }
 
 private const val WEBSITE = "https://monobrowser.vercel.app"
 
@@ -98,6 +98,9 @@ fun SettingsScreen(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: ()
                 Page.Exceptions -> ExceptionsPage(manager, back)
                 Page.Permissions -> PermissionsPage(manager, back)
                 Page.Licenses -> LicensesPage(back)
+                Page.Tips -> SubPage(stringResource(R.string.tips_title), back) {
+                    com.voluene.monobrowser.ui.onboarding.GestureTips(Modifier.padding(20.dp))
+                }
             }
         }
     }
@@ -251,6 +254,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
             SettingRow(stringResource(R.string.app_name), stringResource(R.string.about_version, version))
             if (manager.updater.enabled) UpdateRows(manager, settings.autoUpdateCheck, onOpenUrl, onAutoChange = { v -> update { it.copy(autoUpdateCheck = v) } })
+            SettingRow(stringResource(R.string.tips_title), stringResource(R.string.tips_hint), onClick = { open(Page.Tips) })
             SettingRow(stringResource(R.string.about_licenses), stringResource(R.string.about_licenses_hint), onClick = { open(Page.Licenses) })
             SettingRow(stringResource(R.string.about_website), WEBSITE.removePrefix("https://"), onClick = { onOpenUrl(WEBSITE) })
         }
