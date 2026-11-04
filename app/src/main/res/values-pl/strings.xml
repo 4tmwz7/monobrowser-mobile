@@ -420,4 +420,8 @@
     <string name="site_permission_reset">Resetuj</string>
     <string name="settings_full_address">Pokazuj pełny adres</string>
     <string name="settings_full_address_hint">W przeciwnym razie pasek adresu pokazuje stronę, z kłódką przy bezpiecznym połączeniu</string>
+    <string name="settings_web_dark">Tryb ciemny stron</string>
+    <string name="settings_web_dark_auto">Strony, które go obsługują</string>
+    <string name="settings_web_dark_force">Wszystkie strony (przyciemniaj resztę)</string>
+    <string name="settings_web_dark_off">Nigdy</string>
 </resources>

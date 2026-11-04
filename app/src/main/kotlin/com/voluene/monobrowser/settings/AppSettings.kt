@@ -33,6 +33,17 @@ enum class ToolbarPosition { BOTTOM, TOP }
 @Serializable
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** Dark mode for web pages (only matters while the app itself is dark). */
+@Serializable
+enum class WebDarkMode {
+    /** Pages that have their own dark design use it (prefers-color-scheme follows the app). */
+    AUTO,
+    /** Additionally darken pages without a dark design (algorithmic darkening). */
+    FORCE,
+    /** Pages always render light. */
+    OFF,
+}
+
 /** Default action of a long-press on a link in a page (desktop: Glance trigger; mobile has only the long-press). */
 @Serializable
 enum class LinkLongPress { GLANCE, MENU }
@@ -70,6 +81,7 @@ data class AppSettings(
     val searchSuggestions: Boolean = true,
     /** Address bar: the whole URL instead of the site's host with a lock. */
     val showFullAddress: Boolean = false,
+    val webDarkMode: WebDarkMode = WebDarkMode.AUTO,
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String

@@ -50,6 +50,7 @@ import com.voluene.monobrowser.settings.ThemeMode
 import com.voluene.monobrowser.settings.Themes
 import com.voluene.monobrowser.settings.LinkLongPress
 import com.voluene.monobrowser.settings.ToolbarPosition
+import com.voluene.monobrowser.settings.WebDarkMode
 import com.voluene.monobrowser.ui.common.ChoiceDialog
 import com.voluene.monobrowser.ui.common.ConfirmDialog
 import com.voluene.monobrowser.ui.common.HairLine
@@ -157,6 +158,11 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
     val linkNames = mapOf(LinkLongPress.GLANCE to stringResource(R.string.settings_link_glance), LinkLongPress.MENU to stringResource(R.string.settings_link_menu))
     val modeNames = mapOf(ThemeMode.SYSTEM to stringResource(R.string.settings_mode_system), ThemeMode.LIGHT to stringResource(R.string.settings_mode_light), ThemeMode.DARK to stringResource(R.string.settings_mode_dark))
     val themeName = Themes.find(settings.themeId)?.name ?: stringResource(R.string.settings_theme_default)
+    val webDarkNames = mapOf(
+        WebDarkMode.AUTO to stringResource(R.string.settings_web_dark_auto),
+        WebDarkMode.FORCE to stringResource(R.string.settings_web_dark_force),
+        WebDarkMode.OFF to stringResource(R.string.settings_web_dark_off),
+    )
 
     ScreenScaffold(stringResource(R.string.settings_title), onClose) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
@@ -192,6 +198,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             SettingRow(stringResource(R.string.settings_theme), themeName, onClick = { open(Page.Theme) })
             SettingRow(stringResource(R.string.settings_mode), modeNames[settings.themeMode], onClick = { dialog = "mode" })
             SettingRow(stringResource(R.string.settings_text_size), stringResource(R.string.text_size_value, settings.textZoom), onClick = { dialog = "textSize" })
+            SettingRow(stringResource(R.string.settings_web_dark), webDarkNames[settings.webDarkMode], onClick = { dialog = "webDark" })
 
             Section(stringResource(R.string.settings_section_privacy))
             SwitchRow(stringResource(R.string.settings_adblock), stringResource(R.string.settings_adblock_hint), settings.adblockEnabled) { v -> update { it.copy(adblockEnabled = v) } }
@@ -248,6 +255,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             onChange = { zoom -> update { it.copy(textZoom = zoom) } },
             onDismiss = { dialog = null },
         )
+        "webDark" -> ChoiceDialog(stringResource(R.string.settings_web_dark), webDarkNames.toList(), settings.webDarkMode, { c -> update { it.copy(webDarkMode = c) } }, { dialog = null })
         "mode" -> ChoiceDialog(stringResource(R.string.settings_mode), modeNames.toList(), settings.themeMode, { c -> update { it.copy(themeMode = c) } }, { dialog = null })
         "customUrl" -> TextInputDialog(
             stringResource(R.string.settings_custom_url), settings.customSearchUrl.takeIf { settings.searchEngine == SearchEngine.CUSTOM }.orEmpty(),

@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -131,6 +132,9 @@ fun BrowserScreen(manager: TabManager) {
 
     // The page background follows the theme (blank tabs, areas that have not painted yet).
     LaunchedEffect(scheme.background) { manager.setPageBackground(scheme.background.toArgb()) }
+    // Web pages follow the app's light / dark appearance (Settings -> Dark mode for websites).
+    val appDark = scheme.background.luminance() < 0.5f
+    LaunchedEffect(appDark, settings.webDarkMode) { manager.setWebAppearance(appDark) }
     // A blank new tab was opened or reused: go straight to typing.
     LaunchedEffect(manager) { manager.paletteRequests.collect { overlay = Overlay.Palette } }
     // Update checks begin once the first frame is on screen (non-blocking, release builds only).

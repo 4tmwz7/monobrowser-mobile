@@ -420,4 +420,8 @@
     <string name="site_permission_reset">Reset</string>
     <string name="settings_full_address">Show full address</string>
     <string name="settings_full_address_hint">Otherwise the address bar shows the site, with a lock for secure connections</string>
+    <string name="settings_web_dark">Dark mode for websites</string>
+    <string name="settings_web_dark_auto">Sites that support it</string>
+    <string name="settings_web_dark_force">All sites (darken the rest)</string>
+    <string name="settings_web_dark_off">Never</string>
 </resources>

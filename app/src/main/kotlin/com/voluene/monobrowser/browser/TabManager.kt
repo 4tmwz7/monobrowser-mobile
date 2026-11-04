@@ -40,6 +40,10 @@ import com.voluene.monobrowser.notes.NotesStore
 import com.voluene.monobrowser.settings.AppSettings
 import com.voluene.monobrowser.settings.SettingsCodec
 import com.voluene.monobrowser.settings.StartupMode
+import com.voluene.monobrowser.settings.Themes
+import com.voluene.monobrowser.settings.WebDarkMode
+import android.view.ContextThemeWrapper
+import androidx.webkit.WebSettingsCompat
 import com.voluene.monobrowser.util.StateFile
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -167,6 +171,46 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     private var persistJob: Job? = null
     @Volatile private var pageBackground: Int? = null
+
+    /** Whether new WebViews get the dark context theme, and whether pages without a dark design are darkened. */
+    private var webDark: Boolean = initialWebDark(app)
+    private var webForceDark: Boolean = settingsFile.value.webDarkMode == WebDarkMode.FORCE
+
+    private fun initialWebDark(app: Application): Boolean {
+        val s = settingsFile.value
+        if (s.webDarkMode == WebDarkMode.OFF) return false
+        val systemDark = (app.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        return Themes.resolve(s.themeId, s.themeMode, systemDark).dark
+    }
+
+    /**
+     * The app's light/dark appearance (or the setting) changed. A WebView's colour scheme comes from the theme of
+     * the context it was created with, so live normal tabs are rebuilt from their saved state (sleeping tabs pick
+     * it up when they wake). Private tabs cannot be saved and keep their current look until reopened.
+     */
+    fun setWebAppearance(appDark: Boolean) {
+        val mode = settingsFile.value.webDarkMode
+        val dark = appDark && mode != WebDarkMode.OFF
+        val force = dark && mode == WebDarkMode.FORCE
+        if (dark == webDark && force == webForceDark) return
+        val rebuild = dark != webDark
+        webDark = dark
+        webForceDark = force
+        webViews.values.forEach(::applyDarkening)
+        if (!rebuild) return
+        val active = _activeTabId.value
+        val normal = webViews.keys.filter { id -> _tabs.value.any { it.id == id && !it.isPrivate } }
+        normal.forEach(::sleep)
+        if (active in normal) ensureLive(active)
+    }
+
+    private fun applyDarkening(webView: WebView) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+            // Some WebView versions report the feature but still refuse the call: never let that break a tab.
+            runCatching { WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, webForceDark) }
+        }
+    }
 
     fun updateSettings(transform: (AppSettings) -> AppSettings) {
         val before = settingsFile.value
@@ -453,7 +497,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     private fun createWebView(tab: Tab): WebView {
         // Application context: the WebView outlives the Activity (config changes are handled manually).
         // Dialogs, file choosers and permission requests are routed through [TabUi] / [host] instead.
-        val webView = WebView(getApplication())
+        // The context theme decides prefers-color-scheme (and whether algorithmic darkening may apply).
+        val webView = WebView(ContextThemeWrapper(getApplication(), if (webDark) R.style.Theme_MonoBrowser_WebDark else R.style.Theme_MonoBrowser_WebLight))
         // Profile must be set before any other WebView call.
         if (tab.isPrivate && privateProfilesSupported) {
             ProfileStore.getInstance().getOrCreateProfile(PRIVATE_PROFILE)
@@ -477,6 +522,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
             }
         }
         if (tab.desktopMode) applyDesktopMode(webView, true)
+        applyDarkening(webView)
         pageBackground?.let(webView::setBackgroundColor)
         webView.webViewClient = MonoWebViewClient(tab.id, adBlocker, this, this)
         adBlocker.attach(webView) // adblock: cosmetic
