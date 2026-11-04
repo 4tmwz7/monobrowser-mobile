@@ -114,4 +114,9 @@ class PaletteEngineTest {
         assertEquals("ws-praca", hit.action.arg)
         assertEquals(PaletteActionId.SWITCH_WORKSPACE, hit.action.id)
     }
+
+    @Test fun foldMapsLettersWithoutDecomposition() {
+        assertEquals("lodz zolc", PaletteEngine.fold("Łódź Żółć"))
+        assertEquals("strasse", PaletteEngine.fold("Straße"))
+    }
 }

@@ -252,11 +252,17 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     fun closeTab(id: Long) {
         val closing = _tabs.value.firstOrNull { it.id == id } ?: return
         val neighbour = WorkspaceTabs.neighbourAfterClose(_tabs.value, id)
+        lastClosed = null
         if (!closing.isPrivate && closing.url.isNotBlank() && SessionCodec.isRestorableUrl(closing.url) &&
             !UrlUtils.isAboutBlankUrl(closing.url)
         ) {
             val failed = errorUrls[id] ?: closing.url
-            _recentlyClosed.update { (listOf(ClosedTab(failed, closing.title)) + it).take(SessionCodec.MAX_RECENTLY_CLOSED) }
+            val entry = ClosedTab(failed, closing.title)
+            _recentlyClosed.update { (listOf(entry) + it).take(SessionCodec.MAX_RECENTLY_CLOSED) }
+            lastClosed = LastClosed(
+                entry, _tabs.value.indexOfFirst { it.id == id }, closing.workspaceId,
+                wasActive = _activeTabId.value == id, desktopMode = closing.desktopMode,
+            )
         }
         cancelDialogsOf(id)
         webViews.remove(id)?.let { destroy(it, closing.isPrivate) }
@@ -278,8 +284,38 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         }
     }
 
+    /** The tab closed last (for "Undo" in the tab switcher): it comes back at the same place. */
+    private data class LastClosed(val tab: ClosedTab, val index: Int, val workspaceId: String, val wasActive: Boolean, val desktopMode: Boolean)
+    private var lastClosed: LastClosed? = null
+
+    /** Undoes the last [closeTab] (normal tabs with a page only). Returns false when there is nothing to undo. */
+    fun undoCloseTab(): Boolean {
+        val last = lastClosed ?: return false
+        lastClosed = null
+        _recentlyClosed.update { list -> if (list.firstOrNull() == last.tab) list.drop(1) else list }
+        val workspace = last.workspaceId.takeIf { id -> _workspaces.value.any { it.id == id } } ?: WorkspaceOps.MAIN_ID
+        val tab = Tab(
+            id = nextId++, url = last.tab.url, title = last.tab.title, workspaceId = workspace, sleeping = true,
+            desktopMode = last.desktopMode,
+        )
+        _tabs.update { list -> list.toMutableList().apply { add(last.index.coerceIn(0, size), tab) } }
+        if (last.wasActive) activate(tab.id) else schedulePersist()
+        return true
+    }
+
+    /** Closes every tab of a workspace; it is left with one fresh blank tab. */
+    fun closeAllTabs(workspaceId: String = _currentWorkspaceId.value) {
+        val ids = WorkspaceTabs.inWorkspace(_tabs.value, workspaceId).map { it.id }
+        if (ids.isEmpty()) return
+        // A fresh tab first: closing the active tab would otherwise wake every neighbour in turn.
+        if (_activeTabId.value in ids || _currentWorkspaceId.value == workspaceId) newTab(workspaceId = workspaceId)
+        ids.forEach(::closeTab)
+        lastClosed = null
+    }
+
     /** Re-opens the most recently closed normal tab. Returns false when there is none. */
     fun reopenClosedTab(): Boolean {
+        lastClosed = null
         val closed = _recentlyClosed.value.firstOrNull() ?: return false
         _recentlyClosed.update { it.drop(1) }
         val id = newTab(url = closed.url)

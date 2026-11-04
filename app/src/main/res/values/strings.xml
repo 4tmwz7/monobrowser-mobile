@@ -391,4 +391,11 @@
     <string name="address_paste_go">Paste and go</string>
     <string name="address_edit">Edit address</string>
     <string name="address_share">Share link</string>
+    <string name="tabs_close_all">Close all tabs</string>
+    <string name="tabs_close_all_message">Close all %1$d tabs of this workspace? They stay in \"Reopen closed tab\".</string>
+    <string name="tabs_close_all_confirm">Close all</string>
+    <string name="tabs_closed">Closed: %1$s</string>
+    <string name="tabs_undo">Undo</string>
+    <string name="tabs_filter_hint">Search tabs</string>
+    <string name="tab_desktop_badge">DESKTOP</string>
 </resources>

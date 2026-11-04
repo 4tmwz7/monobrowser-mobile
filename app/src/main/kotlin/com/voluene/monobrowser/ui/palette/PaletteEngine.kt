@@ -60,8 +60,10 @@ object PaletteEngine {
     const val MAX_HISTORY = 5
     const val MAX_ACTIONS = 8
 
+    /** Lower case without diacritics; letters that do not decompose (Polish ł, ø, đ, ß ...) are mapped by hand. */
     fun fold(value: String): String =
         Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+            .replace('ł', 'l').replace('ø', 'o').replace('đ', 'd').replace('ħ', 'h').replace("ß", "ss").replace("æ", "ae").replace("œ", "oe")
 
     private fun words(query: String) = fold(query).split(Regex("\\s+")).filter { it.isNotEmpty() }
 

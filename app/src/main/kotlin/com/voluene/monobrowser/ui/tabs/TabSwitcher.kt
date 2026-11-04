@@ -1,6 +1,32 @@
 package com.voluene.monobrowser.ui.tabs
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import com.voluene.monobrowser.data.TopSites
+import com.voluene.monobrowser.ui.common.ConfirmDialog
+import com.voluene.monobrowser.ui.common.MonoTextField
+import com.voluene.monobrowser.ui.palette.PaletteEngine
+import com.voluene.monobrowser.ui.start.monogram
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -65,6 +91,8 @@ fun TabSwitcher(
     onMoveWorkspace: (id: String, delta: Int) -> Unit,
     onDeleteWorkspace: (id: String, closeTabs: Boolean) -> Unit,
     onMoveTabToWorkspace: (tabId: Long, workspaceId: String) -> Unit,
+    onUndoClose: () -> Unit,
+    onCloseAll: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -74,9 +102,34 @@ fun TabSwitcher(
     var creating by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<String?>(null) }
     fun byId(id: String?) = workspaces.workspaces.firstOrNull { it.id == id }
+    var query by remember { mutableStateOf("") }
+    var confirmCloseAll by remember { mutableStateOf(false) }
+    var undoTitle by remember { mutableStateOf<String?>(null) }
+    var undoKey by remember { mutableIntStateOf(0) }
+    LaunchedEffect(undoKey) { if (undoTitle != null) { delay(UNDO_MS); undoTitle = null } }
+    val shown = remember(tabs, query) { tabs.filter { tabMatches(it, query) } }
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = (tabs.indexOfFirst { it.id == activeId } - 1).coerceAtLeast(0))
+    val untitled = stringResource(R.string.tab_untitled)
+
+    fun close(tab: Tab) {
+        onClose(tab.id)
+        // Only normal tabs with a page can come back (the same rule as "Reopen closed tab").
+        undoTitle = if (!tab.isPrivate && tab.url.isNotBlank() && !UrlUtils.isAboutBlankUrl(tab.url)) {
+            tab.title.ifBlank { UrlUtils.shortUrlLabel(tab.url) }
+        } else null
+        undoKey++
+    }
+
     Column(Modifier.fillMaxSize().background(scheme.background).statusBarsPadding().navigationBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.tabs_title), color = scheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.tabs_title), color = scheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(
+                tabs.size.toString(), color = scheme.onBackground.copy(alpha = 0.55f), fontSize = 20.sp,
+                modifier = Modifier.padding(start = 8.dp).weight(1f),
+            )
+            IconButton(onClick = { confirmCloseAll = true }, enabled = tabs.isNotEmpty()) {
+                Icon(Icons.Default.Delete, stringResource(R.string.tabs_close_all), tint = scheme.onBackground)
+            }
             IconButton(onClick = onDismiss) {
                 Icon(Icons.Default.Close, stringResource(R.string.tabs_close_switcher), tint = scheme.onBackground)
             }
@@ -87,11 +140,19 @@ fun TabSwitcher(
             onOptions = { workspaceOptions = it },
             onCreate = { creating = true },
         )
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 16.dp)) {
-            items(tabs, key = { it.id }) { tab ->
+        if (tabs.size >= FILTER_MIN_TABS || query.isNotEmpty()) {
+            MonoTextField(query, { query = it }, stringResource(R.string.tabs_filter_hint), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
+        }
+        LazyColumn(
+            Modifier.weight(1f).fillMaxWidth(), state = list,
+            verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            items(shown, key = { it.id }) { tab ->
                 val bg = if (tab.isPrivate) scheme.onBackground else scheme.background
                 val fg = if (tab.isPrivate) scheme.background else scheme.onBackground
-                val borderWidth = if (tab.id == activeId) 3.dp else 1.dp
+                val active = tab.id == activeId
+                val borderWidth = if (active) 3.dp else 1.dp
+                SwipeToClose(onClose = { close(tab) }, label = stringResource(R.string.tab_close), modifier = Modifier.animateItem()) {
                 Column(Modifier.fillMaxWidth().background(bg).border(borderWidth, scheme.outline, RectangleShape)) {
                     Row(
                         Modifier.fillMaxWidth()
@@ -99,9 +160,21 @@ fun TabSwitcher(
                             .padding(start = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+                        val host = UrlUtils.shortUrlLabel(tab.url).substringBefore('/')
+                        Box(
+                            Modifier.size(36.dp).border(1.dp, fg, RectangleShape).then(if (active) Modifier.background(fg) else Modifier),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            val key = TopSites.hostKey(tab.url)
+                            Text(
+                                if (key != null) monogram(TopSites.label(key)) else "+",
+                                color = if (active) bg else fg, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Column(Modifier.weight(1f).padding(start = 12.dp, top = 10.dp, bottom = 10.dp)) {
                             val badges = buildList {
                                 if (tab.isPrivate) add(stringResource(R.string.tab_private_badge))
+                                if (tab.desktopMode) add(stringResource(R.string.tab_desktop_badge))
                                 if (tab.neverSleep) add(stringResource(R.string.tab_never_sleep_badge))
                                 if (tab.sleeping) add(stringResource(R.string.tab_sleeping_badge))
                             }
@@ -109,7 +182,7 @@ fun TabSwitcher(
                                 Text(badges.joinToString("  ·  "), color = fg, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                             Text(
-                                tab.title.ifBlank { UrlUtils.shortUrlLabel(tab.url).ifBlank { stringResource(R.string.tab_untitled) } },
+                                tab.title.ifBlank { host.ifBlank { untitled } },
                                 color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
                             )
                             if (tab.url.isNotBlank() && !UrlUtils.isAboutBlankUrl(tab.url)) {
@@ -119,7 +192,7 @@ fun TabSwitcher(
                                 Text(stringResource(R.string.tab_blocked_count, tab.blockedCount), color = fg.copy(alpha = 0.7f), fontSize = 12.sp)
                             }
                         }
-                        IconButton(onClick = { onClose(tab.id) }) {
+                        IconButton(onClick = { close(tab) }) {
                             Icon(Icons.Default.Close, stringResource(R.string.tab_close), tint = fg)
                         }
                     }
@@ -143,6 +216,24 @@ fun TabSwitcher(
                         }
                     }
                 }
+                }
+            }
+        }
+        undoTitle?.let { title ->
+            Row(
+                Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp).fillMaxWidth().background(scheme.onBackground)
+                    .padding(start = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.tabs_closed, title), color = scheme.background, fontSize = 14.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                Text(
+                    stringResource(R.string.tabs_undo).uppercase(), color = scheme.background, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.clickable { onUndoClose(); undoTitle = null }.padding(horizontal = 16.dp, vertical = 14.dp),
+                )
             }
         }
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -152,6 +243,16 @@ fun TabSwitcher(
             }
             MonoButton(stringResource(R.string.tab_reopen_closed), onReopen, Modifier.fillMaxWidth(), enabled = canReopen)
         }
+    }
+
+    if (confirmCloseAll) {
+        ConfirmDialog(
+            stringResource(R.string.tabs_close_all),
+            stringResource(R.string.tabs_close_all_message, tabs.size),
+            stringResource(R.string.tabs_close_all_confirm),
+            onConfirm = { onCloseAll(); undoTitle = null },
+            onDismiss = { confirmCloseAll = false },
+        )
     }
 
     workspaceOptions?.let { id ->
@@ -201,3 +302,63 @@ fun TabSwitcher(
         )
     }
 }
+
+private const val UNDO_MS = 4_000L
+private const val FILTER_MIN_TABS = 6
+
+/** Tab list filter: every word of [query] must appear in the title or the URL (accents ignored). */
+internal fun tabMatches(tab: Tab, query: String): Boolean {
+    val words = PaletteEngine.fold(query).split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (words.isEmpty()) return true
+    val haystack = PaletteEngine.fold("${tab.title} ${tab.url}")
+    return words.all { haystack.contains(it) }
+}
+
+/**
+ * Swipe sideways to close: the row follows the finger; past [THRESHOLD] of its width it flies out and [onClose]
+ * runs, otherwise it springs back. The uncovered strip shows [label].
+ */
+@Composable
+private fun SwipeToClose(onClose: () -> Unit, label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val offset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var width by remember { mutableIntStateOf(1) }
+    val close by rememberUpdatedState(onClose)
+    Box(modifier.fillMaxWidth().onSizeChanged { width = it.width.coerceAtLeast(1) }) {
+        if (offset.value != 0f) {
+            Box(
+                Modifier.matchParentSize().background(scheme.surfaceVariant).padding(horizontal = 20.dp),
+                contentAlignment = if (offset.value > 0) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                Text(label.uppercase(), color = scheme.onBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            }
+        }
+        Box(
+            Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }
+                .graphicsLayer { alpha = 1f - (abs(offset.value) / width).coerceIn(0f, 1f) * 0.6f }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            scope.launch {
+                                if (abs(offset.value) > width * THRESHOLD) {
+                                    offset.animateTo(if (offset.value > 0) width.toFloat() else -width.toFloat(), tween(150))
+                                    close()
+                                    offset.snapTo(0f)
+                                } else {
+                                    offset.animateTo(0f, spring())
+                                }
+                            }
+                        },
+                        onDragCancel = { scope.launch { offset.animateTo(0f, spring()) } },
+                        onHorizontalDrag = { change, delta ->
+                            change.consume()
+                            scope.launch { offset.snapTo(offset.value + delta) }
+                        },
+                    )
+                },
+        ) { content() }
+    }
+}
+
+private const val THRESHOLD = 0.4f

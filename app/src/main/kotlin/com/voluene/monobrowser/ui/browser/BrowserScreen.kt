@@ -399,6 +399,8 @@ fun BrowserScreen(manager: TabManager) {
                 onMoveWorkspace = manager::moveWorkspace,
                 onDeleteWorkspace = manager::deleteWorkspace,
                 onMoveTabToWorkspace = manager::moveTabToWorkspace,
+                onUndoClose = { manager.undoCloseTab() },
+                onCloseAll = { manager.closeAllTabs() },
                 onDismiss = { overlay = Overlay.None },
             )
             Overlay.History -> HistoryScreen(

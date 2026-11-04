@@ -391,4 +391,11 @@
     <string name="address_paste_go">Wklej i przejdź</string>
     <string name="address_edit">Edytuj adres</string>
     <string name="address_share">Udostępnij link</string>
+    <string name="tabs_close_all">Zamknij wszystkie karty</string>
+    <string name="tabs_close_all_message">Zamknąć wszystkie karty (%1$d) w tej przestrzeni? Zostaną w „Przywróć zamkniętą kartę”.</string>
+    <string name="tabs_close_all_confirm">Zamknij wszystkie</string>
+    <string name="tabs_closed">Zamknięto: %1$s</string>
+    <string name="tabs_undo">Cofnij</string>
+    <string name="tabs_filter_hint">Szukaj kart</string>
+    <string name="tab_desktop_badge">KOMPUTER</string>
 </resources>
