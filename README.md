@@ -48,10 +48,15 @@ Tagging `vX.Y.Z` runs `.github/workflows/release.yml`, which builds, signs and p
 ## Features
 
 Browsing
-- Start page on new tabs: clock, search, most visited sites (long-press a tile to remove it), recently closed tabs
-- Reader view (article text only; text size, serif/sans), desktop site per tab, page text size, pinch-to-zoom, print / save as PDF
-- `blob:` downloads (generated files), long-press the address bar for copy / paste and go
-- Tabs and private tabs (separate WebView `Profile` when supported); swipe the address bar sideways to switch tabs; tabs survive restarts (normal tabs only, with back/forward state)
+- Start page on new tabs: clock, search, pinned and most visited sites (long-press a tile: pin / remove), reading list, recently closed tabs
+- Address bar shows the site with a lock; tap the lock for site information (certificate, ad blocker and desktop site for the site, remembered permissions)
+- Search suggestions (Google, DuckDuckGo, Bing, Ecosia; never in private tabs), recent pages in the empty palette; also Brave Search and Startpage
+- Reader view (article text only; text size, serif/sans) and a reading list saved for offline reading
+- Desktop site per tab, page text size, pinch-to-zoom, print / save as PDF, full screen video
+- `target=_blank` / `window.open` open new tabs (pop-ups without a tap are blocked)
+- `blob:` downloads (generated files); messages with actions ("Downloaded x · Open", "Undo", "Switch")
+- Long-press the address bar for copy / paste and go / pin; long-press back or forward for the tab's history
+- Tab grid with greyscale page previews; tabs and private tabs (separate WebView `Profile` when supported); swipe the address bar sideways to switch tabs; tabs survive restarts (normal tabs only, with back/forward state)
 - At most 5 live WebViews: least-recently-used tabs go to sleep and wake on demand; per-tab "Never sleep"
 - Workspaces: named groups of tabs (create, rename, icon, reorder, delete, move a tab between them); the tab switcher shows one workspace at a time
 - Glance: long-press a link for a quick preview in a bottom sheet (own WebView, same profile, ad blocking on); "Open in tab" turns it into a real tab without reloading. A link menu (new / background / private tab, copy, share, preview) is available instead if you prefer
@@ -62,18 +67,19 @@ Browsing
 
 Privacy and control
 - Built-in ad blocker (adblock-rust via JNI, desktop filter lists, per-site exceptions, counter)
-- Per-site camera / microphone / location prompts, JS dialogs, file upload, safe handling of `mailto:` / `tel:` / `intent:` links
+- Per-site camera / microphone / location prompts (decisions are remembered; private tabs only for the session), JS dialogs, file upload, safe handling of `mailto:` / `tel:` / `intent:` links
 - Clear browsing data, per-site permission list, onboarding with search engine and toolbar choice
 
 Look and feel
 - Strictly black / white / grey and rectangular, light and dark; optional flat colour themes from the desktop app
+- Dark mode for websites follows the app (sites with a dark design use it; optionally darken all sites)
 - Corners that touch the phone's rounded screen corners follow them (concentric radius, Android 12+); everything else stays square
 - Predictive back (Android 14+): overlays shrink and reveal what is underneath while you swipe; back to the home screen preview when the app has nothing to go back to
 - Animated overlays; swipe the tab list rows to close (with Undo); swipe up on the address bar for the tab list; long-press the tab counter for a new tab
 - Back on a tab opened from a link returns to the tab it came from
-- Launcher shortcuts (New tab, Private tab), "Search in MonoBrowser" in the text selection menu, share links or text to the browser
+- Launcher shortcuts (New tab, Private tab), Quick Settings tile (private tab), "Search in MonoBrowser" in the text selection menu, share links or text to the browser
 - English and Polish, launcher icon identical to the desktop app (adaptive + themed)
 
 ## Status
 
-Phases 1-4 are implemented (browsing core, settings, ad blocker, bookmarks, palette, Glance, workspaces, notes). Not implemented yet: certificate exceptions, a custom theme editor, persisted site-permission decisions. Everything was developed without a connected phone, so on-device testing is still pending.
+Phases 1-4 are implemented (browsing core, settings, ad blocker, bookmarks, palette, Glance, workspaces, notes). Not implemented yet: certificate exceptions, a custom theme editor. Everything was developed without a connected phone, so on-device testing is still pending.
