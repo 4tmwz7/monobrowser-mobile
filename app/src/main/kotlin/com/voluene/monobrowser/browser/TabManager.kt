@@ -263,6 +263,11 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     class FullScreen(val tabId: Long, val view: android.view.View, val callback: WebChromeClient.CustomViewCallback)
 
     // Declared before init: opening the first tab already touches it.
+    // Declared before init (which opens the first tab and reads them).
+    private val _floating = MutableStateFlow<Long?>(null)
+    /** The copy opened under the floating window (closed again on expand when it was not used for anything else). */
+    private var floatingCopy: Long? = null
+    private val _pictureInPicture = MutableStateFlow(false)
     private val _fullScreen = MutableStateFlow<FullScreen?>(null)
     val fullScreen: StateFlow<FullScreen?> = _fullScreen.asStateFlow()
 
@@ -418,6 +423,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     }
 
     fun switchTo(id: Long) {
+        if (id == _floating.value) { expandFloating(); return }
         if (_tabs.value.any { it.id == id }) activate(id)
     }
 
@@ -442,6 +448,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
             )
         }
         cancelDialogsOf(id)
+        if (_floating.value == id) _floating.value = null
+        if (floatingCopy == id) floatingCopy = null
         _thumbnails.update { it - id }
         _loadProgress.update { it - id }
         webMedia.clear(id)
@@ -682,7 +690,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         val active = _activeTabId.value
         val live = webViews.keys.mapNotNull { id ->
             val tab = _tabs.value.firstOrNull { it.id == id } ?: return@mapNotNull null
-            LiveTab(id, lastUsed[id] ?: 0L, id == active, protected = tab.neverSleep || tab.isPrivate)
+            LiveTab(id, lastUsed[id] ?: 0L, id == active, protected = tab.neverSleep || tab.isPrivate || id == _floating.value)
         }
         SleepPolicy.pickVictims(live).forEach(::sleep)
     }
@@ -869,7 +877,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         val active = _activeTabId.value
         webViews.keys.toList().forEach { id ->
             val tab = _tabs.value.firstOrNull { it.id == id } ?: return@forEach
-            if (id == active || tab.neverSleep || tab.isPrivate) return@forEach
+            if (id == active || id == _floating.value || tab.neverSleep || tab.isPrivate) return@forEach
             val webView = webViews[id] ?: return@forEach
             isPlayingMedia(webView) { playing -> if (!playing && id != _activeTabId.value) sleep(id) }
         }
@@ -1637,13 +1645,78 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
 
     // --- Media playing in pages ---
 
-    private val _pictureInPicture = MutableStateFlow(false)
     /** The app is a floating video window: only the video is shown. */
     val pictureInPicture: StateFlow<Boolean> = _pictureInPicture.asStateFlow()
 
     /** The video that a floating window would show: playing, in the current tab. */
     fun pictureInPictureVideo(requirePlaying: Boolean = true): com.voluene.monobrowser.media.WebMediaState? =
-        webMedia.state.value?.takeIf { (it.playing || !requirePlaying) && it.isVideo && it.tabId == _activeTabId.value }
+        webMedia.state.value?.takeIf {
+            (it.playing || !requirePlaying) && it.isVideo && (it.tabId == _activeTabId.value || it.tabId == _floating.value)
+        }
+
+    /** What plays in the pages (for the floating window's play button and shape). */
+    val mediaState: StateFlow<com.voluene.monobrowser.media.WebMediaState?> get() = webMedia.state
+
+    fun togglePlayback(tabId: Long) {
+        if (webMedia.state.value?.let { it.tabId == tabId && it.playing } == true) pause(tabId) else play(tabId)
+    }
+
+    /**
+     * The tab shown in the floating video window over the browser (its video fills it); the browser below goes on
+     * with a copy of that page that does not play by itself, so its comments and links can be read meanwhile.
+     */
+    val floating: StateFlow<Long?> = _floating.asStateFlow()
+
+    /** Moves the playing video of the current tab into the floating window. False when nothing plays here. */
+    fun canFloatVideo(): Boolean =
+        webMedia.state.value?.let { it.playing && it.isVideo && it.tabId == _activeTabId.value && it.tabId != _floating.value } == true
+
+    fun floatVideo(): Boolean {
+        if (!canFloatVideo()) return false
+        val video = webMedia.state.value ?: return false
+        val tab = tab(video.tabId) ?: return false
+        if (_floating.value != null) closeFloating()
+        exitFullScreen()
+        _floating.value = tab.id
+        webViews[tab.id]?.let { web ->
+            runCatching { web.evaluateJavascript("window.__monoPip && window.__monoPip(true); window.__monoGuard && window.__monoGuard(true)", null) }
+        }
+        val copy = newTab(isPrivate = tab.isPrivate, url = tab.url, workspaceId = tab.workspaceId, openerId = tab.id)
+        // The copy shows the page; only the user starts playback there.
+        webViews[copy]?.settings?.mediaPlaybackRequiresUserGesture = true
+        floatingCopy = copy
+        return true
+    }
+
+    /** Back to the floating tab, full size. The copy goes away when it still shows the same page. */
+    fun expandFloating() {
+        val id = _floating.value ?: return
+        unfloat(id)
+        val copy = floatingCopy
+        floatingCopy = null
+        val source = tab(id)
+        activate(id)
+        tab(copy ?: return)?.let { c -> if (source != null && c.url == source.url) closeTab(c.id) }
+    }
+
+    /** The window's close button: playback stops, the tab stays where it was. */
+    fun closeFloating() {
+        val id = _floating.value ?: return
+        pause(id)
+        unfloat(id)
+        floatingCopy = null
+    }
+
+    private fun unfloat(id: Long) {
+        _floating.value = null
+        if (_pictureInPicture.value) return
+        webViews[id]?.let { web ->
+            runCatching { web.evaluateJavascript("window.__monoPip && window.__monoPip(false); window.__monoGuard && window.__monoGuard(${!appVisible})", null) }
+        }
+    }
+
+    /** The floating tab's WebView (for the window); null when there is none. */
+    fun floatingWebView(): WebView? = _floating.value?.let { webViews[it] }
 
     fun enterPictureInPicture(): Boolean = host?.enterPictureInPicture() == true
 
@@ -1653,18 +1726,23 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         _pictureInPicture.value = active
         guardPlayback(active || !appVisible)
         val tabId = webMedia.state.value?.tabId ?: _activeTabId.value
-        // A page element already in full screen is shown as it is.
+        // A page element already in full screen is shown as it is; the floating window keeps its video filled.
         if (active && _fullScreen.value != null) return
+        if (tabId == _floating.value) return
         webViews[tabId]?.let { runCatching { it.evaluateJavascript("window.__monoPip && window.__monoPip($active)", null) } }
     }
 
     /** Pages may not pause their own playback while nobody can see them (background, floating window). */
     private fun guardPlayback(on: Boolean) {
-        webViews.values.forEach { runCatching { it.evaluateJavascript("window.__monoGuard && window.__monoGuard($on)", null) } }
+        webViews.forEach { (id, web) ->
+            val guard = on || id == _floating.value
+            runCatching { web.evaluateJavascript("window.__monoGuard && window.__monoGuard($guard)", null) }
+        }
     }
 
     /** The floating window was closed (swiped away): like closing a video player, playback stops. */
     fun onPictureInPictureDismissed() {
+        if (_floating.value != null) { closeFloating(); return }
         webMedia.state.value?.let { pause(it.tabId) }
     }
 

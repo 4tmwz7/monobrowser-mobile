@@ -511,4 +511,5 @@
     <string name="settings_pip_hint">Wyjście z aplikacji podczas odtwarzania wideo w bieżącej karcie przenosi je do małego okienka. Wideo gra też w tle przy wyłączonym ekranie.</string>
     <string name="menu_more">Więcej</string>
     <string name="menu_less">Mniej</string>
+    <string name="floating_expand">Wróć do karty</string>
 </resources>

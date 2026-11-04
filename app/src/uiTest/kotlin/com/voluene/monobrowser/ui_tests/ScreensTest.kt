@@ -272,6 +272,18 @@ class ScreensTest {
         }
     }
 
+    @Test fun floatingVideo() = shot("floating_video", dark = true) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val web = androidx.compose.runtime.remember { android.webkit.WebView(context).apply { setBackgroundColor(0xFF7A8A99.toInt()) } }
+        Box(Modifier.fillMaxSize()) {
+            StartPage(false, sites, true, emptyList(), onSearch = {}, onOpen = {}, onSiteOptions = {}, onReopen = {})
+            com.voluene.monobrowser.ui.browser.FloatingVideo(
+                webView = web, aspectRatio = 16f / 9f, playing = true, fill = false, barAtTop = false,
+                onExpand = {}, onPlayPause = {}, onClose = {},
+            )
+        }
+    }
+
     @Test fun loadingBar() = shot("loading_bar") {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth())

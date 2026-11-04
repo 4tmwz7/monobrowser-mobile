@@ -145,6 +145,8 @@ fun BrowserScreen(manager: TabManager) {
     val fullScreen by manager.fullScreen.collectAsState()
     // Floating video window: only the page (whose video fills it) is shown, no bars, sheets or dialogs.
     val pip by manager.pictureInPicture.collectAsState()
+    val floatingId by manager.floating.collectAsState()
+    val media by manager.mediaState.collectAsState()
     // Not read here (only inside the progress lines' draw phase): load steps do not recompose this screen.
     val loadProgress = manager.loadProgress.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
@@ -280,14 +282,14 @@ fun BrowserScreen(manager: TabManager) {
         ) { manager.toggleBookmark(tab.id) },
         MenuTile(R.string.menu_history, Icons.Filled.DateRange) { overlay = Overlay.History },
         // While a video plays here, its floating window is one of the main tiles (share moves down).
-        if (manager.pictureInPictureVideo() != null) {
-            MenuTile(R.string.menu_pip, MenuIcons.PictureInPicture) { if (!manager.enterPictureInPicture()) toast(R.string.pip_unavailable) }
+        if (manager.canFloatVideo()) {
+            MenuTile(R.string.menu_pip, MenuIcons.PictureInPicture) { manager.floatVideo() }
         } else {
             MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() }
         },
         MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
         // --- More ---
-        MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() }.takeIf { manager.pictureInPictureVideo() != null },
+        MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() }.takeIf { manager.canFloatVideo() },
         MenuTile(R.string.menu_find, Icons.Filled.Search, enabled = isWeb) { manager.openFind() },
         MenuTile(R.string.menu_downloads, MenuIcons.Download) { overlay = Overlay.Downloads },
         MenuTile(R.string.menu_reader, MenuIcons.Article, enabled = isWeb && !tab.isLoading) { openReader() },
@@ -295,7 +297,7 @@ fun BrowserScreen(manager: TabManager) {
         MenuTile(R.string.menu_notes, Icons.Filled.Edit) { openNotes(newNote = false) },
         // Watching a video, "share" moved here and "add to note" makes room (the grid stays 2 + 2 rows).
         MenuTile(R.string.menu_note_add_short, Icons.Filled.List, enabled = isWeb && !tab.isPrivate) { manager.addPageToNote(tab.id) }
-            .takeIf { manager.pictureInPictureVideo() == null },
+            .takeIf { !manager.canFloatVideo() },
         MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
         MenuTile(R.string.menu_text_size, MenuIcons.TextSize) { textSizeOpen = true },
         // Print / PDF: "/drukuj" or "/print" in the address bar.
@@ -740,6 +742,22 @@ fun BrowserScreen(manager: TabManager) {
             )
         }
         (dialogs.firstOrNull { it.tabId == glance?.id } ?: dialogs.firstOrNull { it.tabId == activeId })?.let { PageDialogView(it) }
+        }
+        // The floating video window, over everything but a full-screen video (it is the whole window in PiP).
+        floatingId?.let { id ->
+            manager.floatingWebView()?.let { web ->
+                val m = media?.takeIf { it.tabId == id }
+                FloatingVideo(
+                    webView = web,
+                    aspectRatio = m?.takeIf { it.isVideo }?.let { it.videoWidth.toFloat() / it.videoHeight } ?: (16f / 9f),
+                    playing = m?.playing == true,
+                    fill = pip,
+                    barAtTop = toolbarTop,
+                    onExpand = manager::expandFloating,
+                    onPlayPause = { manager.togglePlayback(id) },
+                    onClose = manager::closeFloating,
+                )
+            }
         }
         // Full screen video above everything else.
         fullScreen?.let { FullScreenLayer(it, onExit = manager::exitFullScreen) }
