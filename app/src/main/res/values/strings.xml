@@ -368,7 +368,7 @@
     <string name="reader_font_serif">Serif</string>
     <string name="reader_font_sans">Sans</string>
     <string name="reader_close">Close reader view</string>
-    <string name="reader_original">Original page</string>
+    <string name="reader_original">Open the original page</string>
     <string name="start_top_sites">Top sites</string>
     <string name="start_recently_closed">Recently closed</string>
     <string name="start_remove_site">Remove from start page</string>
@@ -425,4 +425,10 @@
     <string name="settings_web_dark_force">All sites (darken the rest)</string>
     <string name="settings_web_dark_off">Never</string>
     <string name="tile_private_tab">Private tab</string>
+    <string name="reading_list">Reading list</string>
+    <string name="reading_save">Save for offline reading</string>
+    <string name="reading_saved">Saved for offline reading</string>
+    <string name="reading_remove">Remove from reading list</string>
+    <string name="reading_empty">Articles you save in reader view (the bookmark at the top) are kept here and can be read without a connection.</string>
+    <string name="reading_show_all">Show all (%1$d)</string>
 </resources>

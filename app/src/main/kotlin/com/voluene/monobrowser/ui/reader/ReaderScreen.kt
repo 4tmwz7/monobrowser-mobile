@@ -61,6 +61,11 @@ fun ReaderScreen(
     onFontSize: (Int) -> Unit,
     onSerif: (Boolean) -> Unit,
     onClose: () -> Unit,
+    /** Saved in the reading list (offline); null hides the button. */
+    saved: Boolean? = null,
+    onToggleSave: () -> Unit = {},
+    /** Opening a saved article offline: the site label opens the original page. */
+    onOpenOriginal: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val fg = scheme.onBackground
@@ -83,8 +88,19 @@ fun ReaderScreen(
         ) {
             Text(
                 article.site.ifBlank { stringResource(R.string.menu_reader) }, color = fg.copy(alpha = 0.7f), fontSize = 13.sp,
-                fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).then(
+                    if (onOpenOriginal != null) Modifier.clickable(onClickLabel = stringResource(R.string.reader_original), onClick = onOpenOriginal) else Modifier,
+                ),
             )
+            if (saved != null) {
+                IconButton(onClick = onToggleSave) {
+                    Icon(
+                        if (saved) com.voluene.monobrowser.ui.browser.MenuIcons.Bookmark else com.voluene.monobrowser.ui.browser.MenuIcons.BookmarkOutline,
+                        stringResource(if (saved) R.string.reading_remove else R.string.reading_save), tint = fg,
+                    )
+                }
+            }
             ToolButton("A−", stringResource(R.string.reader_smaller), fontSize > AppSettings.READER_FONT_RANGE.first) { onFontSize(fontSize - 2) }
             ToolButton("A+", stringResource(R.string.reader_larger), fontSize < AppSettings.READER_FONT_RANGE.last) { onFontSize(fontSize + 2) }
             ToolButton(

@@ -58,6 +58,7 @@ import com.voluene.monobrowser.data.TopSite
 import com.voluene.monobrowser.data.TopSites
 import com.voluene.monobrowser.reader.Reader
 import com.voluene.monobrowser.reader.ReaderArticle
+import com.voluene.monobrowser.reader.ReadingList
 import com.voluene.monobrowser.data.PersistedTab
 import com.voluene.monobrowser.data.SessionCodec
 import com.voluene.monobrowser.data.SessionData
@@ -100,6 +101,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         File(app.filesDir, "bookmarks.json"), BookmarkData(), BookmarkCodec::decode, BookmarkCodec::encode, viewModelScope,
     )
     val bookmarks: StateFlow<BookmarkData> = bookmarkFile.state
+
+    /** Reader-view articles saved for offline reading (`reading/<id>.json`). */
+    val readingList = ReadingList(File(app.filesDir, "reading"), viewModelScope)
 
     /** Markdown notes (`notes/<id>.md`). */
     val notes = NotesRepository(NotesStore(File(app.filesDir, "notes")), viewModelScope)
@@ -1010,6 +1014,18 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
             return
         }
         webView.evaluateJavascript(Reader.SCRIPT) { raw -> onResult(Reader.parse(raw)) }
+    }
+
+    /** "Save for offline reading" without opening reader view. */
+    fun saveForLater(tabId: Long) {
+        extractArticle(tabId) { article ->
+            if (article == null) {
+                toast(R.string.reader_unavailable)
+            } else {
+                readingList.save(article)
+                toast(R.string.reading_saved)
+            }
+        }
     }
 
     // --- Notes ---

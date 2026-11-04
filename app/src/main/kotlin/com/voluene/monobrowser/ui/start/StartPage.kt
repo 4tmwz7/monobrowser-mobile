@@ -66,6 +66,9 @@ fun StartPage(
     topSites: List<TopSite>?,
     showTopSites: Boolean,
     recentlyClosed: List<ClosedTab>,
+    readingList: List<com.voluene.monobrowser.reader.SavedArticleInfo> = emptyList(),
+    onOpenSaved: (com.voluene.monobrowser.reader.SavedArticleInfo) -> Unit = {},
+    onShowReadingList: () -> Unit = {},
     onSearch: () -> Unit,
     onOpen: (String) -> Unit,
     onSiteOptions: (TopSite) -> Unit,
@@ -109,6 +112,29 @@ fun StartPage(
                     Text(stringResource(R.string.start_empty), color = fg.copy(alpha = 0.6f), fontSize = 14.sp)
                 } else {
                     TileGrid(topSites, columns, fg, bg, onOpen, onSiteOptions)
+                }
+            }
+
+            if (readingList.isNotEmpty()) {
+                SectionTitle(stringResource(R.string.reading_list), fg)
+                Column(Modifier.fillMaxWidth().border(1.dp, fg.copy(alpha = 0.25f), RectangleShape)) {
+                    readingList.take(MAX_RECENT).forEachIndexed { index, item ->
+                        if (index > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(fg.copy(alpha = 0.12f)))
+                        Column(Modifier.fillMaxWidth().clickable { onOpenSaved(item) }.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Text(item.title.ifBlank { item.url }, color = fg, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${item.site}  \u00b7  ${stringResource(R.string.reader_minutes, item.minutes)}",
+                                color = fg.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    if (readingList.size > MAX_RECENT) {
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(fg.copy(alpha = 0.12f)))
+                        Text(
+                            stringResource(R.string.reading_show_all, readingList.size), color = fg, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth().clickable(onClick = onShowReadingList).padding(horizontal = 14.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
 

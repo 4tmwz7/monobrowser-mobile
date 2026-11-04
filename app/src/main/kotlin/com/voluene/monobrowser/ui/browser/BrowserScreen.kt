@@ -84,8 +84,9 @@ import androidx.compose.animation.togetherWith
 import com.voluene.monobrowser.ui.common.PredictiveBackContainer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
-private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes, Reader }
+private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes, Reader, ReadingList }
 
 /**
  * Overlay transitions: pages fade in while growing from 96 %, the menu sheet slides up from the bottom; leaving
@@ -117,12 +118,16 @@ fun BrowserScreen(manager: TabManager) {
     val currentWorkspaceId by manager.currentWorkspaceId.collectAsState()
     val glance by manager.glance.collectAsState()
     val thumbnails by manager.thumbnails.collectAsState()
+    val readingItems by manager.readingList.items.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
     val tab = tabs.firstOrNull { it.id == activeId } ?: return
     var overlay by remember { mutableStateOf(Overlay.None) }
     var notesOpenId by remember { mutableStateOf<String?>(null) }
     var creatingWorkspace by remember { mutableStateOf(false) }
     var readerArticle by remember { mutableStateOf<ReaderArticle?>(null) }
+    /** The reader shows a saved copy (offline) rather than the current page. */
+    var readerOffline by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var textSizeOpen by remember { mutableStateOf(false) }
     var addressMenuOpen by remember { mutableStateOf(false) }
     var siteOptions by remember { mutableStateOf<TopSite?>(null) }
@@ -177,6 +182,18 @@ fun BrowserScreen(manager: TabManager) {
                 toast(R.string.reader_unavailable)
             } else if (manager.activeTabId.value == tabId) {
                 readerArticle = article
+                readerOffline = false
+                overlay = Overlay.Reader
+            }
+        }
+    }
+
+    fun openSaved(item: com.voluene.monobrowser.reader.SavedArticleInfo) {
+        scope.launch {
+            val article = withContext(Dispatchers.IO) { manager.readingList.load(item.id) }
+            if (article != null) {
+                readerArticle = article
+                readerOffline = true
                 overlay = Overlay.Reader
             }
         }
@@ -269,6 +286,8 @@ fun BrowserScreen(manager: TabManager) {
             add(PaletteAction(PaletteActionId.PRINT, stringResource(R.string.menu_print), "drukuj print pdf zapisz save"))
         }
         add(PaletteAction(PaletteActionId.TEXT_SIZE, stringResource(R.string.menu_text_size), "rozmiar tekstu czcionka text size font zoom powiekszenie"))
+        add(PaletteAction(PaletteActionId.READING_LIST, stringResource(R.string.reading_list), "do przeczytania czytaj pozniej offline reading list read later zapisane"))
+        if (isWeb) add(PaletteAction(PaletteActionId.SAVE_FOR_LATER, stringResource(R.string.reading_save), "zapisz do przeczytania offline save read later"))
         if (isWeb) {
             add(PaletteAction(
                 PaletteActionId.TOGGLE_ADBLOCK_SITE,
@@ -334,6 +353,8 @@ fun BrowserScreen(manager: TabManager) {
             PaletteActionId.DESKTOP_SITE -> manager.toggleDesktopMode(tab.id)
             PaletteActionId.PRINT -> printPage()
             PaletteActionId.TEXT_SIZE -> textSizeOpen = true
+            PaletteActionId.READING_LIST -> overlay = Overlay.ReadingList
+            PaletteActionId.SAVE_FOR_LATER -> manager.saveForLater(tab.id)
         }
     }
 
@@ -400,6 +421,9 @@ fun BrowserScreen(manager: TabManager) {
                         topSites = topSites,
                         showTopSites = settings.showTopSites,
                         recentlyClosed = if (tab.isPrivate) emptyList() else recentlyClosed,
+                        readingList = if (tab.isPrivate) emptyList() else readingItems,
+                        onOpenSaved = ::openSaved,
+                        onShowReadingList = { overlay = Overlay.ReadingList },
                         onSearch = { overlay = Overlay.Palette },
                         onOpen = { manager.navigate(tab.id, it) },
                         onSiteOptions = { siteOptions = it },
@@ -507,8 +531,20 @@ fun BrowserScreen(manager: TabManager) {
                     onFontSize = { size -> manager.updateSettings { it.copy(readerFontSize = size) } },
                     onSerif = { serif -> manager.updateSettings { it.copy(readerSerif = serif) } },
                     onClose = { overlay = Overlay.None }, // the article stays for the exit animation
+                    // Private tabs never write to disk, so nothing is saved from them.
+                    saved = if (tab.isPrivate && !readerOffline) null else readingItems.any { it.url == article.url },
+                    onToggleSave = {
+                        if (readingItems.any { it.url == article.url }) manager.readingList.remove(article.url) else manager.readingList.save(article)
+                    },
+                    onOpenOriginal = if (readerOffline) ({ overlay = Overlay.None; manager.navigate(tab.id, article.url) }) else null,
                 )
             }
+            Overlay.ReadingList -> com.voluene.monobrowser.ui.reader.ReadingListScreen(
+                items = readingItems,
+                onOpen = ::openSaved,
+                onRemove = { manager.readingList.remove(it.url) },
+                onClose = { overlay = Overlay.None },
+            )
             Overlay.Palette -> {
                 val initial = remember { if (tab.url.isBlank() || UrlUtils.isAboutBlankUrl(tab.url)) "" else UrlUtils.displayUrl(tab.url) }
                 PaletteScreen(

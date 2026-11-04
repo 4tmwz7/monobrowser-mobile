@@ -368,7 +368,7 @@
     <string name="reader_font_serif">Szeryfowa</string>
     <string name="reader_font_sans">Bezszeryfowa</string>
     <string name="reader_close">Zamknij tryb czytania</string>
-    <string name="reader_original">Oryginalna strona</string>
+    <string name="reader_original">Otwórz oryginalną stronę</string>
     <string name="start_top_sites">Najczęściej odwiedzane</string>
     <string name="start_recently_closed">Ostatnio zamknięte</string>
     <string name="start_remove_site">Usuń ze strony startowej</string>
@@ -425,4 +425,10 @@
     <string name="settings_web_dark_force">Wszystkie strony (przyciemniaj resztę)</string>
     <string name="settings_web_dark_off">Nigdy</string>
     <string name="tile_private_tab">Karta prywatna</string>
+    <string name="reading_list">Do przeczytania</string>
+    <string name="reading_save">Zapisz do czytania offline</string>
+    <string name="reading_saved">Zapisano do czytania offline</string>
+    <string name="reading_remove">Usuń z listy do przeczytania</string>
+    <string name="reading_empty">Artykuły zapisane w trybie czytania (zakładka u góry) trafiają tutaj i można je czytać bez internetu.</string>
+    <string name="reading_show_all">Pokaż wszystkie (%1$d)</string>
 </resources>
