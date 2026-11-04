@@ -57,7 +57,6 @@
     <string name="download_started">Rozpoczęto pobieranie: %1$s</string>
     <string name="download_saved">Zapisano w Pobranych: %1$s</string>
     <string name="download_failed">Nie udało się pobrać pliku</string>
-    <string name="download_blob_unsupported">Pobieranie linków blob: nie jest jeszcze obsługiwane</string>
     <string name="download_open_failed">Żadna aplikacja nie może otworzyć tego pliku</string>
     <string name="perm_dialog_title">Uprawnienia witryny</string>
     <string name="perm_message">%1$s chce %2$s.</string>
@@ -398,4 +397,5 @@
     <string name="tabs_undo">Cofnij</string>
     <string name="tabs_filter_hint">Szukaj kart</string>
     <string name="tab_desktop_badge">KOMPUTER</string>
+    <string name="download_too_large">Plik jest za duży, aby go zapisać (ponad 25 MB)</string>
 </resources>

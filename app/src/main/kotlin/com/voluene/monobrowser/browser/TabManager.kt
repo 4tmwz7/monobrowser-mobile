@@ -58,7 +58,10 @@ import com.voluene.monobrowser.data.PersistedTab
 import com.voluene.monobrowser.data.SessionCodec
 import com.voluene.monobrowser.data.SessionData
 import com.voluene.monobrowser.data.SessionStore
+import com.voluene.monobrowser.download.BlobDownload
 import com.voluene.monobrowser.download.DownloadRepository
+import android.webkit.JavascriptInterface
+import java.util.UUID
 import com.voluene.monobrowser.adblock.Adblock
 import com.voluene.monobrowser.util.UrlUtils
 import kotlinx.coroutines.Dispatchers
@@ -451,6 +454,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         webView.webViewClient = MonoWebViewClient(tab.id, adBlocker, this, this)
         adBlocker.attach(webView) // adblock: cosmetic
         webView.webChromeClient = MonoWebChromeClient(tab.id, this, this)
+        webView.addJavascriptInterface(BlobBridge(tab.id), BlobDownload.BRIDGE)
         webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             startDownload(tab.id, url, userAgent, contentDisposition, mimeType)
         }
@@ -1051,7 +1055,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
                 val name = withContext(Dispatchers.IO) { downloads.saveDataUrl(url) }
                 if (name != null) toast(R.string.download_saved, name) else toast(R.string.download_failed)
             }
-            url.startsWith("blob:", ignoreCase = true) -> toast(R.string.download_blob_unsupported) // TODO: fetch blob via JS bridge
+            url.startsWith("blob:", ignoreCase = true) -> startBlobDownload(tabId, url, contentDisposition)
             UrlUtils.isHttpUrl(url) -> withStoragePermission {
                 val referer = webViews[tabId]?.url
                 runCatching {
@@ -1060,6 +1064,50 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
                     .onFailure { toast(R.string.download_failed) }
             }
             else -> toast(R.string.download_failed)
+        }
+    }
+
+    /** One-time tokens of `blob:` downloads in flight (main thread only). */
+    private class PendingBlob(val tabId: Long, val name: String?)
+    private val pendingBlobs = HashMap<String, PendingBlob>()
+
+    /** Asks the page to read the blob and send it back through [BlobBridge]. */
+    private fun startBlobDownload(tabId: Long, url: String, contentDisposition: String?) {
+        val webView = webViews[tabId] ?: return toast(R.string.download_failed)
+        val token = UUID.randomUUID().toString()
+        pendingBlobs[token] = PendingBlob(tabId, BlobDownload.fileNameFromDisposition(contentDisposition))
+        webView.evaluateJavascript(BlobDownload.script(url, token), null)
+    }
+
+    private fun onBlobData(tabId: Long, token: String, dataUrl: String) {
+        val pending = pendingBlobs[token]?.takeIf { it.tabId == tabId } ?: return
+        pendingBlobs.remove(token)
+        withStoragePermission {
+            viewModelScope.launch {
+                val name = withContext(Dispatchers.IO) { downloads.saveDataUrl(dataUrl, pending.name) }
+                if (name != null) toast(R.string.download_saved, name) else toast(R.string.download_failed)
+            }
+        }
+    }
+
+    private fun onBlobFailed(tabId: Long, token: String, reason: String) {
+        if (pendingBlobs[token]?.tabId != tabId) return
+        pendingBlobs.remove(token)
+        toast(if (reason == "size") R.string.download_too_large else R.string.download_failed)
+    }
+
+    /** JavaScript side of `blob:` downloads; calls arrive on a WebView thread and are handed to the main thread. */
+    private inner class BlobBridge(private val tabId: Long) {
+        private val main = Handler(Looper.getMainLooper())
+
+        @JavascriptInterface
+        fun deliver(token: String, dataUrl: String, @Suppress("UNUSED_PARAMETER") mimeType: String) {
+            main.post { onBlobData(tabId, token, dataUrl) }
+        }
+
+        @JavascriptInterface
+        fun fail(token: String, reason: String) {
+            main.post { onBlobFailed(tabId, token, reason) }
         }
     }
 

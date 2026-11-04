@@ -107,40 +107,58 @@ object Reader {
     /** Extraction script; evaluates to a JSON string (see [parse]). */
     val SCRIPT: String = """
         (function () {
-          function txt(n) { return (n.innerText || n.textContent || '').replace(/[ \t\r\n ]+/g, ' ').trim(); }
+          // Block text without footnote markers, edit links and scripts.
+          function clean(n) {
+            var k = n.cloneNode(true);
+            var junk = k.querySelectorAll('sup.reference, .mw-editsection, .reference, script, style, noscript, button');
+            for (var i = 0; i < junk.length; i++) junk[i].remove();
+            return (k.textContent || '').replace(/[ \t\r\n\u00a0]+/g, ' ').trim();
+          }
           function meta(sel) { var m = document.querySelector(sel); return m && m.content ? m.content : ''; }
           var doc = document;
-          var cand = doc.querySelector('article') || doc.querySelector('[itemprop=articleBody]') ||
-                     doc.querySelector('main') || doc.querySelector('[role=main]');
-          var scores = new Map(), best = null, bestScore = 0;
+          // Every paragraph's text is added to all its ancestors (textContent, so collapsed sections count). The root
+          // is found by walking down from <body> while one child still holds 80 % of the paragraph text.
+          var acc = new Map(), total = 0;
           var ps = doc.getElementsByTagName('p');
           for (var i = 0; i < ps.length; i++) {
-            var len = txt(ps[i]).length;
+            var len = (ps[i].textContent || '').replace(/\s+/g, ' ').trim().length;
             if (len < 40) continue;
-            var parent = ps[i].parentElement;
-            if (!parent) continue;
-            scores.set(parent, (scores.get(parent) || 0) + len);
-            if (parent.parentElement) scores.set(parent.parentElement, (scores.get(parent.parentElement) || 0) + len / 2);
+            total += len;
+            for (var el = ps[i].parentElement; el; el = el.parentElement) acc.set(el, (acc.get(el) || 0) + len);
           }
-          scores.forEach(function (s, el) { if (s > bestScore) { bestScore = s; best = el; } });
-          var root = (cand && txt(cand).length > bestScore * 0.8) ? cand : (best || cand || doc.body);
+          var root = doc.body;
+          for (;;) {
+            var here = acc.get(root) || 0, next = null;
+            for (var c = root.firstElementChild; c && here > 0; c = c.nextElementSibling) {
+              if ((acc.get(c) || 0) >= here * 0.8) { next = c; break; }
+            }
+            if (!next) break;
+            root = next;
+          }
+          // An element holding a good part of the article is never dropped as noise or as hidden.
+          function major(c) { return (acc.get(c) || 0) >= Math.max(300, total * 0.25); }
+          // Hidden menus and dialogs are skipped; hidden text that matters (collapsed sections) is kept.
+          function hidden(c) {
+            var style = window.getComputedStyle ? window.getComputedStyle(c) : null;
+            return !!style && (style.display === 'none' || style.visibility === 'hidden');
+          }
           var blocks = [];
           var SKIP = /^(nav|aside|footer|form|script|style|noscript|button|svg|iframe|select|textarea|figcaption)$/i;
-          var NOISE = /(^|[\s_-])(comment|share|social|related|promo|advert|ads?|newsletter|cookie|sidebar|subscribe|paywall|breadcrumb)/i;
+          var NOISE = /(^|[\s_-])(comment|share|social|related|promo|advert|ads?|newsletter|cookie|sidebar|subscribe|paywall|breadcrumb|references?|reflist|navbox|catlinks|footnotes?|infobox)/i;
           function walk(n) {
             for (var c = n.firstElementChild; c; c = c.nextElementSibling) {
               if (blocks.length > $MAX_BLOCKS) return;
               var tag = c.tagName.toLowerCase();
               if (SKIP.test(tag)) continue;
               var cls = (typeof c.className === 'string' ? c.className : '') + ' ' + (c.id || '');
-              if (NOISE.test(cls)) continue;
-              var style = window.getComputedStyle ? window.getComputedStyle(c) : null;
-              if (style && (style.display === 'none' || style.visibility === 'hidden')) continue;
+              // Class-name noise applies to containers only: a <p class="h1-related"> is still a paragraph.
+              var block = /^(p|h[1-6]|li|blockquote|pre)$/.test(tag);
+              if (!major(c) && (hidden(c) || (!block && NOISE.test(cls)))) continue;
               var x;
-              if (/^h[1-6]$/.test(tag)) { x = txt(c); if (x) blocks.push({ t: 'h', x: x }); }
-              else if (tag === 'p') { x = txt(c); if (x.length > 1) blocks.push({ t: 'p', x: x }); }
-              else if (tag === 'li') { x = txt(c); if (x) blocks.push({ t: 'li', x: x }); }
-              else if (tag === 'blockquote') { x = txt(c); if (x) blocks.push({ t: 'q', x: x }); }
+              if (/^h[1-6]$/.test(tag)) { x = clean(c); if (x) blocks.push({ t: 'h', x: x }); }
+              else if (tag === 'p') { x = clean(c); if (x.length > 1) blocks.push({ t: 'p', x: x }); }
+              else if (tag === 'li') { x = clean(c); if (x) blocks.push({ t: 'li', x: x }); }
+              else if (tag === 'blockquote') { x = clean(c); if (x) blocks.push({ t: 'q', x: x }); }
               else if (tag === 'pre') { x = (c.textContent || '').replace(/\s+$/, ''); if (x) blocks.push({ t: 'pre', x: x }); }
               else walk(c);
             }

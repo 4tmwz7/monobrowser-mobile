@@ -60,4 +60,4 @@ Look
 
 ## Status
 
-Phases 1-4 are implemented (browsing core, settings, ad blocker, bookmarks, palette, Glance, workspaces, notes). Not implemented yet: `blob:` downloads, certificate exceptions, a custom theme editor, persisted site-permission decisions. Everything was developed without a connected phone, so on-device testing is still pending.
+Phases 1-4 are implemented (browsing core, settings, ad blocker, bookmarks, palette, Glance, workspaces, notes). Not implemented yet: certificate exceptions, a custom theme editor, persisted site-permission decisions. Everything was developed without a connected phone, so on-device testing is still pending.

@@ -57,7 +57,6 @@
     <string name="download_started">Download started: %1$s</string>
     <string name="download_saved">Saved to Downloads: %1$s</string>
     <string name="download_failed">Download failed</string>
-    <string name="download_blob_unsupported">Downloading blob: links is not supported yet</string>
     <string name="download_open_failed">No app can open this file</string>
     <string name="perm_dialog_title">Site permission</string>
     <string name="perm_message">%1$s wants to %2$s.</string>
@@ -398,4 +397,5 @@
     <string name="tabs_undo">Undo</string>
     <string name="tabs_filter_hint">Search tabs</string>
     <string name="tab_desktop_badge">DESKTOP</string>
+    <string name="download_too_large">The file is too large to save (over 25 MB)</string>
 </resources>

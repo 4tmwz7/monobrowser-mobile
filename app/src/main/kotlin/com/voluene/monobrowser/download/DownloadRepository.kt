@@ -55,10 +55,11 @@ class DownloadRepository(context: Context) {
     }
 
     /** Saves a `data:` URL into the public Downloads folder. Returns the file name, or null on failure. */
-    fun saveDataUrl(url: String): String? {
+    fun saveDataUrl(url: String, suggestedName: String? = null): String? {
         val data = DataUrl.parse(url) ?: return null
         val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(data.mimeType) ?: "bin"
-        val name = "download-${System.currentTimeMillis()}.$extension"
+        val name = BlobDownload.sanitize(suggestedName)?.let { BlobDownload.withExtension(it, extension) }
+            ?: "download-${System.currentTimeMillis()}.$extension"
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
@@ -71,7 +72,12 @@ class DownloadRepository(context: Context) {
                 context.contentResolver.openOutputStream(uri)!!.use { it.write(data.bytes) }
             } else {
                 val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).also { it.mkdirs() }
-                File(dir, name).writeBytes(data.bytes)
+                // MediaStore renames duplicates itself; the plain file API would overwrite them.
+                var file = File(dir, name)
+                var n = 1
+                while (file.exists()) file = File(dir, "${name.substringBeforeLast('.')} (${n++}).${name.substringAfterLast('.', extension)}")
+                file.writeBytes(data.bytes)
+                return@runCatching file.name
             }
             name
         }.getOrNull()
