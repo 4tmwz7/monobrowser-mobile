@@ -134,6 +134,7 @@ fun BrowserScreen(manager: TabManager) {
     var addressMenuOpen by remember { mutableStateOf(false) }
     var siteOptions by remember { mutableStateOf<TopSite?>(null) }
     var siteInfo by remember { mutableStateOf<TabManager.SiteInfo?>(null) }
+    var historySteps by remember { mutableStateOf<List<TabManager.HistoryStep>?>(null) }
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val toolbarTop = settings.toolbarPosition == ToolbarPosition.TOP
@@ -163,6 +164,7 @@ fun BrowserScreen(manager: TabManager) {
     BackHandler(enabled = siteOptions != null) { siteOptions = null }
     BackHandler(enabled = textSizeOpen) { textSizeOpen = false }
     BackHandler(enabled = siteInfo != null) { siteInfo = null }
+    BackHandler(enabled = historySteps != null) { historySteps = null }
 
     val isWeb = UrlUtils.isHttpUrl(tab.url)
     val siteHost = HostUtils.hostOfUrl(tab.url)
@@ -400,6 +402,7 @@ fun BrowserScreen(manager: TabManager) {
                         onOpenPalette = { overlay = Overlay.Palette },
                         onAddressLongPress = { addressMenuOpen = true },
                         onSiteInfo = { siteInfo = manager.siteInfo(tab.id) },
+                        onHistory = { forward -> historySteps = manager.navigationHistory(tab.id, forward).takeIf { it.isNotEmpty() } },
                         fullAddress = settings.showFullAddress,
                         onBack = { manager.goBack(tab.id) },
                         onForward = { manager.goForward(tab.id) },
@@ -611,6 +614,14 @@ fun BrowserScreen(manager: TabManager) {
                 },
             )
             BrowserMenu(entries, onDismiss = { siteOptions = null }, header = site.host)
+        }
+        historySteps?.let { steps ->
+            val entries = steps.map { step ->
+                MenuEntry(0, text = step.title.ifBlank { UrlUtils.shortUrlLabel(step.url) }, subtitle = UrlUtils.shortUrlLabel(step.url)) {
+                    manager.goBackOrForward(tab.id, step.steps)
+                }
+            }
+            BrowserMenu(entries, onDismiss = { historySteps = null }, header = stringResource(R.string.tab_history))
         }
         siteInfo?.let { info ->
             val host = HostUtils.hostOfUrl(tab.url)

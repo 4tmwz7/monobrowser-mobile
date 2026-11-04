@@ -105,6 +105,8 @@ fun AddressBar(
     onOpenPalette: () -> Unit,
     onAddressLongPress: () -> Unit,
     onSiteInfo: () -> Unit,
+    /** Long press on back (false) / forward (true): the tab's history in that direction. */
+    onHistory: (forward: Boolean) -> Unit,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReloadOrStop: () -> Unit,
@@ -160,8 +162,8 @@ fun AddressBar(
             Modifier.fillMaxWidth().height(48.dp).cornerSafeHorizontalPadding(fromBottom = !toolbarTop),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BarButton(Icons.AutoMirrored.Filled.ArrowBack, R.string.action_back, tab.canGoBack, fg, onBack)
-            BarButton(Icons.AutoMirrored.Filled.ArrowForward, R.string.action_forward, tab.canGoForward, fg, onForward)
+            BarButton(Icons.AutoMirrored.Filled.ArrowBack, R.string.action_back, tab.canGoBack, fg, onLongClick = { onHistory(false) }, onClick = onBack)
+            BarButton(Icons.AutoMirrored.Filled.ArrowForward, R.string.action_forward, tab.canGoForward, fg, onLongClick = { onHistory(true) }, onClick = onForward)
             val searchLabel = stringResource(R.string.address_hint)
             val fieldCorners = rememberScreenAwareShape()
             Row(
@@ -215,9 +217,9 @@ fun AddressBar(
             BarButton(
                 if (tab.isLoading) Icons.Default.Close else Icons.Default.Refresh,
                 if (tab.isLoading) R.string.action_stop else R.string.action_reload,
-                true, fg, onReloadOrStop,
+                true, fg, onClick = onReloadOrStop,
             )
-            BarButton(Icons.Default.MoreVert, R.string.action_menu, true, fg, onMenu)
+            BarButton(Icons.Default.MoreVert, R.string.action_menu, true, fg, onClick = onMenu)
             val tabsLabel = stringResource(R.string.action_tabs, tabCount)
             // Sits right in the bottom (or top) corner of the screen: follow its curve.
             val counterCorners = rememberScreenAwareShape()
@@ -240,8 +242,25 @@ fun AddressBar(
 }
 
 @Composable
-private fun BarButton(icon: ImageVector, label: Int, enabled: Boolean, tint: Color, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(38.dp)) {
+private fun BarButton(icon: ImageVector, label: Int, enabled: Boolean, tint: Color, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+    if (onLongClick == null) {
+        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(38.dp)) {
+            Icon(icon, contentDescription = stringResource(label), tint = tint.copy(alpha = if (enabled) 1f else 0.35f))
+        }
+        return
+    }
+    // Back / forward: a long press lists the tab's history in that direction.
+    Box(
+        Modifier.size(38.dp).combinedClickable(
+            enabled = enabled,
+            role = androidx.compose.ui.semantics.Role.Button,
+            onClickLabel = stringResource(label),
+            onLongClickLabel = stringResource(R.string.tab_history),
+            onLongClick = onLongClick,
+            onClick = onClick,
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
         Icon(icon, contentDescription = stringResource(label), tint = tint.copy(alpha = if (enabled) 1f else 0.35f))
     }
 }

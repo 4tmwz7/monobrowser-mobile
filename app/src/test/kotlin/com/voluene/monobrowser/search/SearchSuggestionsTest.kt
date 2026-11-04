@@ -13,6 +13,10 @@ class SearchSuggestionsTest {
         assertTrue(google.endsWith("&hl=pl&q=%C5%82%C3%B3d%C5%BA%20pogoda"))
         assertEquals("https://duckduckgo.com/ac/?type=list&q=a%26b", SearchSuggestions.url(SearchEngine.DUCKDUCKGO, "a&b", "en"))
         assertNull(SearchSuggestions.url(SearchEngine.CUSTOM, "x", "en"))
+        assertEquals("https://api.bing.com/osjson.aspx?query=x", SearchSuggestions.url(SearchEngine.BING, "x", "en"))
+        assertEquals("https://ac.ecosia.org/autocomplete?type=list&q=x", SearchSuggestions.url(SearchEngine.ECOSIA, "x", "en"))
+        assertNull(SearchSuggestions.url(SearchEngine.BRAVE, "x", "en"))
+        assertNull(SearchSuggestions.url(SearchEngine.STARTPAGE, "x", "en"))
         assertNull(SearchSuggestions.url(SearchEngine.GOOGLE, "   ", "en"))
     }
 

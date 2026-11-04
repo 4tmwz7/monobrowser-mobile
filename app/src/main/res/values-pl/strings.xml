@@ -439,4 +439,5 @@
     <string name="start_pin">Przypnij do strony startowej</string>
     <string name="start_unpin">Odepnij od strony startowej</string>
     <string name="popup_blocked">Zablokowano wyskakujące okno</string>
+    <string name="tab_history">Historia karty</string>
 </resources>

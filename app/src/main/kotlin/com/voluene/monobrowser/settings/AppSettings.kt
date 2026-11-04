@@ -6,10 +6,14 @@ import kotlinx.serialization.json.Json
 
 /** Search engines of the desktop app (`SearchEngine` in main.ts). */
 @Serializable
-enum class SearchEngine(val template: String?) {
-    GOOGLE("https://www.google.com/search?q={query}"),
-    DUCKDUCKGO("https://duckduckgo.com/?q={query}"),
-    CUSTOM(null),
+enum class SearchEngine(val template: String?, val displayName: String) {
+    GOOGLE("https://www.google.com/search?q={query}", "Google"),
+    DUCKDUCKGO("https://duckduckgo.com/?q={query}", "DuckDuckGo"),
+    BING("https://www.bing.com/search?q={query}", "Bing"),
+    BRAVE("https://search.brave.com/search?q={query}", "Brave Search"),
+    ECOSIA("https://www.ecosia.org/search?q={query}", "Ecosia"),
+    STARTPAGE("https://www.startpage.com/do/search?q={query}", "Startpage"),
+    CUSTOM(null, ""),
 }
 
 /** What the browser opens on launch (desktop `startupMode`: restore / newtab). */

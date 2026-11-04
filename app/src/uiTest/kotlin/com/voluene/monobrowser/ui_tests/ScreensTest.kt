@@ -83,7 +83,10 @@ class ScreensTest {
     private fun browser(tab: Tab, page: @Composable () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) { page() }
-            AddressBar(tab, 3, false, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+            AddressBar(
+                tab = tab, tabCount = 3, toolbarTop = false, onOpenPalette = {}, onAddressLongPress = {}, onSiteInfo = {}, onHistory = {},
+                onBack = {}, onForward = {}, onReloadOrStop = {}, onMenu = {}, onTabs = {}, onNewTab = {}, onSwipeTab = {},
+            )
         }
     }
 

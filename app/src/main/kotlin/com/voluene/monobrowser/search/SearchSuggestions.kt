@@ -25,7 +25,10 @@ object SearchSuggestions {
         return when (engine) {
             SearchEngine.GOOGLE -> "https://suggestqueries.google.com/complete/search?client=firefox&ie=utf-8&oe=utf-8&hl=${UrlUtils.encodeUriComponent(language)}&q=$q"
             SearchEngine.DUCKDUCKGO -> "https://duckduckgo.com/ac/?type=list&q=$q"
-            SearchEngine.CUSTOM -> null
+            SearchEngine.BING -> "https://api.bing.com/osjson.aspx?query=$q"
+            SearchEngine.ECOSIA -> "https://ac.ecosia.org/autocomplete?type=list&q=$q"
+            // No public suggestion endpoint (Brave answers bots with a page, Startpage has none).
+            SearchEngine.BRAVE, SearchEngine.STARTPAGE, SearchEngine.CUSTOM -> null
         }
     }
 

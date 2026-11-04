@@ -36,11 +36,12 @@ class AppSettingsTest {
 
     @Test fun invalidJsonIsNull_unknownValuesFallBackToDefaults() {
         assertNull(SettingsCodec.decode("{oops"))
-        val s = SettingsCodec.decode("""{"toolbarPosition":"LEFT","searchEngine":"BING","themeId":"nope","futureKey":1,"adblockEnabled":false}""")!!
+        val s = SettingsCodec.decode("""{"toolbarPosition":"LEFT","searchEngine":"ALTAVISTA","themeId":"nope","futureKey":1,"adblockEnabled":false}""")!!
         assertEquals(ToolbarPosition.BOTTOM, s.toolbarPosition)
         assertEquals(SearchEngine.GOOGLE, s.searchEngine)
         assertEquals(Themes.DEFAULT_ID, s.themeId)
         assertFalse(s.adblockEnabled)
+        assertEquals(SearchEngine.BING, SettingsCodec.decode("""{"searchEngine":"BING"}""")!!.searchEngine)
     }
 
     @Test fun customEngineNeedsValidTemplate() {

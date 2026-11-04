@@ -44,6 +44,7 @@ import com.voluene.monobrowser.settings.AppLanguage
 import com.voluene.monobrowser.settings.AppSettings
 import com.voluene.monobrowser.settings.NewTabPage
 import com.voluene.monobrowser.settings.SearchEngine
+import com.voluene.monobrowser.search.SearchSuggestions
 import com.voluene.monobrowser.settings.SettingsCodec
 import com.voluene.monobrowser.settings.StartupMode
 import com.voluene.monobrowser.settings.ThemeMode
@@ -149,7 +150,8 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
     fun update(transform: (AppSettings) -> AppSettings) = manager.updateSettings(transform)
 
     val engineNames = mapOf(
-        SearchEngine.GOOGLE to "Google", SearchEngine.DUCKDUCKGO to "DuckDuckGo", SearchEngine.CUSTOM to stringResource(R.string.settings_engine_custom),
+        *SearchEngine.entries.filter { it != SearchEngine.CUSTOM }.map { it to it.displayName }.toTypedArray(),
+        SearchEngine.CUSTOM to stringResource(R.string.settings_engine_custom),
     )
     val startupNames = mapOf(StartupMode.RESTORE to stringResource(R.string.settings_startup_restore), StartupMode.NEWTAB to stringResource(R.string.settings_startup_newtab))
     val newTabNames = mapOf(NewTabPage.BLANK to stringResource(R.string.settings_newtab_blank), NewTabPage.HOMEPAGE to stringResource(R.string.settings_newtab_homepage))
@@ -171,7 +173,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             if (settings.searchEngine == SearchEngine.CUSTOM) {
                 SettingRow(stringResource(R.string.settings_custom_url), settings.customSearchUrl, onClick = { dialog = "customUrl" })
             }
-            if (settings.searchEngine != SearchEngine.CUSTOM) {
+            if (SearchSuggestions.url(settings.searchEngine, "x", "en") != null) {
                 SwitchRow(stringResource(R.string.settings_suggestions), stringResource(R.string.settings_suggestions_hint), settings.searchSuggestions) { v -> update { it.copy(searchSuggestions = v) } }
             }
             SettingRow(stringResource(R.string.settings_startup), startupNames[settings.startupMode], onClick = { dialog = "startup" })

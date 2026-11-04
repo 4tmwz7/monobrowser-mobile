@@ -519,6 +519,26 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     fun goBack(id: Long) { webViews[id]?.goBack() }
 
+    /** One entry of a tab's back / forward list; [steps] is what goBackOrForward needs (negative = back). */
+    data class HistoryStep(val steps: Int, val title: String, val url: String)
+
+    /** The tab's pages behind (forward = false, nearest first) or ahead of the current one, at most [limit]. */
+    fun navigationHistory(id: Long, forward: Boolean, limit: Int = 15): List<HistoryStep> {
+        val list = webViews[id]?.copyBackForwardList() ?: return emptyList()
+        val current = list.currentIndex
+        val range = if (forward) (current + 1 until list.size) else (current - 1 downTo 0)
+        return range.take(limit).mapNotNull { i ->
+            val item = list.getItemAtIndex(i) ?: return@mapNotNull null
+            val url = errorUrls[id]?.takeIf { i == current } ?: item.url
+            if (url.startsWith("data:")) null else HistoryStep(i - current, item.title.orEmpty(), url)
+        }
+    }
+
+    fun goBackOrForward(id: Long, steps: Int) {
+        val webView = webViews[id] ?: return
+        if (webView.canGoBackOrForward(steps)) webView.goBackOrForward(steps)
+    }
+
     /** The tab back returns to when [tab] has no history of its own (its opener, if still open), else null. */
     fun backTarget(tab: Tab): Long? =
         tab.openerId?.takeIf { opener -> !tab.canGoBack && opener != tab.id && _tabs.value.any { it.id == opener } }

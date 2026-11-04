@@ -45,6 +45,11 @@ data class MenuEntry(
     @param:StringRes val label: Int,
     val enabled: Boolean = true,
     val args: List<Any> = emptyList(),
+    /** Plain text instead of [label] (page titles); [subtitle] is a second, fainter line. */
+    val text: String? = null,
+    val subtitle: String? = null,
+    /** Drawn bold (the current entry of a list). */
+    val current: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -70,14 +75,21 @@ fun BrowserMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, header: String?
             Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
             entries.forEachIndexed { index, entry ->
                 if (index > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(scheme.outlineVariant))
-                Text(
-                    stringResource(entry.label, *entry.args.toTypedArray()),
-                    color = scheme.onBackground.copy(alpha = if (entry.enabled) 1f else 0.35f),
-                    fontSize = 16.sp,
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    Modifier.fillMaxWidth()
                         .clickable(enabled = entry.enabled) { onDismiss(); entry.onClick() }
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                )
+                        .padding(horizontal = 20.dp, vertical = if (entry.subtitle != null) 10.dp else 16.dp),
+                ) {
+                    Text(
+                        entry.text ?: stringResource(entry.label, *entry.args.toTypedArray()),
+                        color = scheme.onBackground.copy(alpha = if (entry.enabled) 1f else 0.35f),
+                        fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        fontWeight = if (entry.current) androidx.compose.ui.text.font.FontWeight.Bold else null,
+                    )
+                    entry.subtitle?.let {
+                        Text(it, color = scheme.onBackground.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
             }
         }

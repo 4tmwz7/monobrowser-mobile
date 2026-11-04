@@ -439,4 +439,5 @@
     <string name="start_pin">Pin to the start page</string>
     <string name="start_unpin">Unpin from the start page</string>
     <string name="popup_blocked">Pop-up blocked</string>
+    <string name="tab_history">Tab history</string>
 </resources>
