@@ -1600,7 +1600,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
                 if (name != null) toast(R.string.download_saved, name) else toast(R.string.download_failed)
             }
             url.startsWith("blob:", ignoreCase = true) -> startBlobDownload(tabId, url, contentDisposition)
-            UrlUtils.isHttpUrl(url) -> withStoragePermission {
+            UrlUtils.isHttpUrl(url) -> withStoragePermission { withNotificationPermission {
                 val referer = webViews[tabId]?.url
                 runCatching {
                     downloads.enqueue(url, userAgent, contentDisposition, mimeType, cookiesFor(tabId, url), referer)
@@ -1609,9 +1609,23 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
                     com.voluene.monobrowser.download.DownloadProgressService.start(getApplication())
                 }
                     .onFailure { toast(R.string.download_failed) }
-            }
+            } }
             else -> toast(R.string.download_failed)
         }
+    }
+
+    /**
+     * Android 13+: asks once for notifications, so the download progress (notification, Now Bar) can be shown;
+     * [then] runs whatever the answer (without it the system's download notification shows the progress).
+     */
+    private fun withNotificationPermission(then: () -> Unit) {
+        val app = getApplication<Application>()
+        if (android.os.Build.VERSION.SDK_INT < 33 ||
+            androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return then()
+        val host = host ?: return then()
+        host.requestPermissions(listOf(android.Manifest.permission.POST_NOTIFICATIONS)) { then() }
     }
 
     /** One-time tokens of `blob:` downloads in flight (main thread only). */

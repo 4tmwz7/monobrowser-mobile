@@ -43,9 +43,10 @@ class DownloadRepository(context: Context) {
         val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle(fileName)
-            // Android 16+: progress is our Live Update (DownloadProgressService); the system only reports the result.
+            // Progress is our notification (DownloadProgressService: Live Update / Now Bar on Android 16+); the system
+            // only reports the result. Without notification permission the system shows the progress itself.
             .setNotificationVisibility(
-                if (DownloadProgressService.supported) DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION
+                if (DownloadProgressService.ownNotification(context)) DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION
                 else DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
             )
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)

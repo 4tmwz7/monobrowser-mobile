@@ -11,7 +11,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.text.format.Formatter
-import androidx.annotation.RequiresApi
 import com.voluene.monobrowser.MainActivity
 import com.voluene.monobrowser.R
 import kotlinx.coroutines.Dispatchers
@@ -23,12 +22,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Android 16+: running downloads as a Live Update (promoted ongoing notification with a progress bar and the
- * percentage as its status chip), which One UI shows in the Now Bar. Polls the system DownloadManager once a
- * second while something downloads and stops when nothing does. Before Android 16 the system's own download
- * notification shows progress (DownloadRepository leaves it on there).
+ * Running downloads in one ongoing notification with a progress bar and the percentage. On Android 16+ it is a
+ * Live Update (promoted ongoing notification, percentage as its status chip), which One UI shows in the Now Bar
+ * and on the lock screen. Polls the system DownloadManager once a second while something downloads and stops
+ * when nothing does. When the app may not post notifications, the system's download notification is used instead
+ * (see [ownNotification]).
  */
-@RequiresApi(36)
 class DownloadProgressService : Service() {
     private val scope = MainScope()
     private val repository by lazy { DownloadRepository(this) }
@@ -38,7 +37,7 @@ class DownloadProgressService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        getSystemService(NotificationManager::class.java).createNotificationChannel(
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL, getString(R.string.downloads_channel), NotificationManager.IMPORTANCE_DEFAULT).apply {
                 setSound(null, null)
                 enableVibration(false)
@@ -78,7 +77,6 @@ class DownloadProgressService : Service() {
         } else {
             Formatter.formatShortFileSize(this, summary.done)
         }
-        val style = Notification.ProgressStyle().setProgressIndeterminate(summary.percent < 0).setProgress(summary.percent.coerceAtLeast(0))
         val builder = Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification_download)
             .setContentTitle(title)
@@ -87,8 +85,13 @@ class DownloadProgressService : Service() {
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_PROGRESS)
             .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
-            .setStyle(style)
-        if (summary.percent >= 0) builder.setShortCriticalText("${summary.percent}%")
+        if (Build.VERSION.SDK_INT >= 36) {
+            builder.setStyle(Notification.ProgressStyle().setProgressIndeterminate(summary.percent < 0).setProgress(summary.percent.coerceAtLeast(0)))
+            if (summary.percent >= 0) builder.setShortCriticalText("${summary.percent}%")
+        } else {
+            builder.setProgress(100, summary.percent.coerceAtLeast(0), summary.percent < 0)
+            if (summary.percent >= 0) builder.setSubText("${summary.percent}%")
+        }
         if (summary.ids.isNotEmpty()) {
             val cancel = PendingIntent.getService(
                 this, 1, Intent(this, DownloadProgressService::class.java).setAction(ACTION_CANCEL).putExtra(EXTRA_IDS, summary.ids.toLongArray()),
@@ -100,7 +103,10 @@ class DownloadProgressService : Service() {
         builder.extras.putBoolean("android.requestPromotedOngoing", true)
         val notification = builder.build()
         if (!foreground) {
-            runCatching { startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) }
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                else startForeground(NOTIFICATION_ID, notification)
+            }
             foreground = true
         } else {
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
@@ -119,11 +125,15 @@ class DownloadProgressService : Service() {
         private const val ACTION_CANCEL = "com.voluene.monobrowser.download.CANCEL"
         private const val EXTRA_IDS = "ids"
 
-        /** Live Updates exist from Android 16 on; before that the system download notification shows progress. */
-        val supported: Boolean get() = Build.VERSION.SDK_INT >= 36
+        /**
+         * Our notification shows the progress (the system's only reports the result) when the app may post
+         * notifications; otherwise the system's download notification, which needs no permission, shows it.
+         */
+        fun ownNotification(context: Context): Boolean =
+            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
 
         fun start(context: Context) {
-            if (!supported) return
+            if (!ownNotification(context)) return
             runCatching { androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, DownloadProgressService::class.java)) }
         }
     }
