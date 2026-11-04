@@ -99,6 +99,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     /** Bookmarks and folders (`bookmarks.json`). */
     private val bookmarkFile = StateFile(
         File(app.filesDir, "bookmarks.json"), BookmarkData(), BookmarkCodec::decode, BookmarkCodec::encode, viewModelScope,
+        loadInBackground = true, // can be large after an import; the first frame does not need it
     )
     val bookmarks: StateFlow<BookmarkData> = bookmarkFile.state
 

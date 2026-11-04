@@ -22,22 +22,47 @@ class StateFile<T : Any>(
     private val encode: (T) -> String,
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * Read the file on [dispatcher] instead of during construction (data the first frame does not need). [state]
+     * starts at the initial value; [value] and [update] read the file right away if it has not been read yet.
+     */
+    loadInBackground: Boolean = false,
 ) {
-    /** True when the file existed and was readable at construction (used for "first launch" detection). */
+    /** True when the file existed and was readable at construction (used for "first launch" detection; always false with loadInBackground). */
     val existed: Boolean
     private val _state: MutableStateFlow<T>
     private val lock = Any()
+    @Volatile private var loaded = false
+
+    private fun read(): T? = file?.takeIf { it.isFile }?.let { runCatching { decode(it.readText()) }.getOrNull() }
 
     init {
-        val loaded = file?.takeIf { it.isFile }?.let { runCatching { decode(it.readText()) }.getOrNull() }
-        existed = loaded != null
-        _state = MutableStateFlow(loaded ?: initial)
+        if (loadInBackground && file != null) {
+            existed = false
+            _state = MutableStateFlow(initial)
+            scope.launch(dispatcher) { ensureLoaded() }
+        } else {
+            val value = read()
+            existed = value != null
+            _state = MutableStateFlow(value ?: initial)
+            loaded = true
+        }
+    }
+
+    private fun ensureLoaded() {
+        if (loaded) return
+        synchronized(lock) {
+            if (loaded) return
+            read()?.let { _state.value = it }
+            loaded = true
+        }
     }
 
     val state: StateFlow<T> = _state.asStateFlow()
-    val value: T get() = _state.value
+    val value: T get() { ensureLoaded(); return _state.value }
 
     fun update(transform: (T) -> T) {
+        ensureLoaded()
         _state.update(transform)
         persist()
     }
