@@ -7,7 +7,10 @@ data class Tab(
     val title: String = "",
     val url: String = "",
     val isPrivate: Boolean = false,
-    /** 0..100 */
+    /**
+     * 0 while loading, 100 when done. The live percentage is in TabManager.loadProgress (it changes many times per
+     * page; keeping it out of the tab list keeps the whole screen from recomposing on every step).
+     */
     val progress: Int = 100,
     val blockedCount: Int = 0,
     val canGoBack: Boolean = false,

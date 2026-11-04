@@ -261,5 +261,16 @@ class ScreensTest {
         }
     }
 
+    @Test fun loadingBar() = shot("loading_bar") {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth())
+            AddressBar(
+                tab = Tab(1, url = "https://example.com/", progress = 0), tabCount = 3, toolbarTop = false, onOpenPalette = {}, onAddressLongPress = {},
+                onSiteInfo = {}, onHistory = {}, onBack = {}, onForward = {}, onReloadOrStop = {}, onMenu = {}, onTabs = {}, onNewTab = {},
+                onSwipeTab = {}, loadProgress = { 40 },
+            )
+        }
+    }
+
     @Test fun textSize() = shot("text_size") { browser(Tab(1, url = "https://example.com/")) { TextSizeDialog(115, {}, {}) } }
 }

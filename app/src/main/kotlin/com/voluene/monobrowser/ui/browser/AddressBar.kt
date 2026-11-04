@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -116,6 +117,8 @@ fun AddressBar(
     onSwipeTab: (Int) -> Unit,
     /** Show the whole URL instead of the site's host. */
     fullAddress: Boolean = false,
+    /** Live load percentage (0..100), read while drawing. */
+    loadProgress: () -> Int = { tab.progress },
 ) {
     val scheme = MaterialTheme.colorScheme
     val bg = if (tab.isPrivate) scheme.onBackground else scheme.background
@@ -128,12 +131,13 @@ fun AddressBar(
     val flingThreshold = with(LocalDensity.current) { 40.dp.toPx() }
 
     val progress: @Composable () -> Unit = {
-        // Thin loading progress bar.
-        Box(Modifier.fillMaxWidth().height(2.dp)) {
-            if (tab.isLoading) {
-                Box(Modifier.fillMaxWidth(tab.progress / 100f).height(2.dp).background(fg))
-            }
-        }
+        // Thin loading progress bar, drawn from [loadProgress] in the draw phase: progress steps repaint this line only.
+        Box(
+            Modifier.fillMaxWidth().height(2.dp).drawBehind {
+                val p = loadProgress()
+                if (tab.isLoading && p in 0..99) drawRect(fg, size = androidx.compose.ui.geometry.Size(size.width * p / 100f, size.height))
+            },
+        )
     }
     // Top: the status-bar strip is drawn by the screen (it must stay when the bar collapses).
     val insets = if (toolbarTop) Modifier else Modifier.navigationBarsPadding().imePadding()

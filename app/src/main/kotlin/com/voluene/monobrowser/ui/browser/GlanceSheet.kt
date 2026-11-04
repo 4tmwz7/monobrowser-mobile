@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,7 @@ fun GlanceSheet(
     onOpenInTab: () -> Unit,
     onOpenInBackground: () -> Unit,
     onClose: () -> Unit,
+    loadProgress: () -> Int = { glance.progress },
 ) {
     val scheme = MaterialTheme.colorScheme
     // System back (with its predictive animation) is handled by the caller's PredictiveBackContainer.
@@ -78,9 +80,13 @@ fun GlanceSheet(
                 }
             }
             // Load progress: a hard-edged line instead of a spinner.
-            Box(Modifier.fillMaxWidth().height(2.dp).background(scheme.outlineVariant)) {
-                if (glance.isLoading) Box(Modifier.fillMaxWidth(glance.progress / 100f).height(2.dp).background(scheme.onBackground))
-            }
+            val line = scheme.onBackground
+            Box(
+                Modifier.fillMaxWidth().height(2.dp).background(scheme.outlineVariant).drawBehind {
+                    val p = loadProgress()
+                    if (glance.isLoading && p in 0..99) drawRect(line, size = androidx.compose.ui.geometry.Size(size.width * p / 100f, size.height))
+                },
+            )
             AndroidView(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 factory = { FrameLayout(it) },

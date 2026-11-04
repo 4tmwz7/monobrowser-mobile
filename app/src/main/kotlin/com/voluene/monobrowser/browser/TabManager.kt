@@ -430,6 +430,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         }
         cancelDialogsOf(id)
         _thumbnails.update { it - id }
+        _loadProgress.update { it - id }
         pendingBlocked.remove(id)
         webViews.remove(id)?.let { destroy(it, closing.isPrivate) }
         lastUsed.remove(id)
@@ -879,6 +880,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         if (errorUrls[tabId] != url) errorUrls.remove(tabId)
         pendingBlocked[tabId]?.set(0) // counts of the previous page
         val keepTitle = errorUrls[tabId] == url
+        _loadProgress.update { it + (tabId to 0) }
         update(tabId) { it.copy(url = url, title = if (keepTitle) it.title else "", blockedCount = 0, progress = 0) }
         if (tabId == _activeTabId.value) showBar()
     }
@@ -907,7 +909,16 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         schedulePersist()
     }
 
-    override fun onProgress(tabId: Long, progress: Int) = update(tabId) { it.copy(progress = progress) }
+    private val _loadProgress = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    /** Live load percentage per tab (read by the progress lines only, in their draw phase). */
+    val loadProgress: StateFlow<Map<Long, Int>> = _loadProgress.asStateFlow()
+
+    override fun onProgress(tabId: Long, progress: Int) {
+        _loadProgress.update { it + (tabId to progress) }
+        // The tab itself only changes when it starts or stops loading.
+        val loading = progress < 100
+        if (tab(tabId)?.isLoading != loading) update(tabId) { it.copy(progress = if (loading) 0 else 100) }
+    }
 
     // Blocked requests are reported from network threads, often hundreds per page: count them atomically and
     // publish the totals at most every BLOCKED_FLUSH_MS, on the main thread (no list copy per request, no races).

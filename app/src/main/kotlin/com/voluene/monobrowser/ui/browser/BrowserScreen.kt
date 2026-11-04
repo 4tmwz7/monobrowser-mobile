@@ -121,6 +121,8 @@ fun BrowserScreen(manager: TabManager) {
     val readingItems by manager.readingList.items.collectAsState()
     val message by manager.message.collectAsState()
     val fullScreen by manager.fullScreen.collectAsState()
+    // Not read here (only inside the progress lines' draw phase): load steps do not recompose this screen.
+    val loadProgress = manager.loadProgress.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
     val tab = tabs.firstOrNull { it.id == activeId } ?: return
     var overlay by remember { mutableStateOf(Overlay.None) }
@@ -408,6 +410,7 @@ fun BrowserScreen(manager: TabManager) {
                         onSiteInfo = { siteInfo = manager.siteInfo(tab.id) },
                         onHistory = { forward -> historySteps = manager.navigationHistory(tab.id, forward).takeIf { it.isNotEmpty() } },
                         fullAddress = settings.showFullAddress,
+                        loadProgress = { loadProgress.value[tab.id] ?: tab.progress },
                         onBack = { manager.goBack(tab.id) },
                         onForward = { manager.goForward(tab.id) },
                         onReloadOrStop = { if (tab.isLoading) manager.stop(tab.id) else manager.reload(tab.id) },
@@ -673,6 +676,7 @@ fun BrowserScreen(manager: TabManager) {
                 onOpenInTab = manager::expandGlance,
                 onOpenInBackground = manager::backgroundGlance,
                 onClose = manager::closeGlance,
+                loadProgress = { loadProgress.value[g.id] ?: g.progress },
             ) }
         }
         if (creatingWorkspace) {
