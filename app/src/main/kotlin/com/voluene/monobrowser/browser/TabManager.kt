@@ -66,6 +66,10 @@ import com.voluene.monobrowser.download.BlobDownload
 import com.voluene.monobrowser.download.DownloadRepository
 import android.webkit.JavascriptInterface
 import java.util.UUID
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import com.voluene.monobrowser.adblock.Adblock
 import com.voluene.monobrowser.util.UrlUtils
 import kotlinx.coroutines.Dispatchers
@@ -161,6 +165,35 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     private val _find = MutableStateFlow<FindState?>(null)
     val find: StateFlow<FindState?> = _find.asStateFlow()
+
+    /** Small page previews for the tab grid (memory only, newest [MAX_THUMBNAILS] tabs). */
+    private val _thumbnails = MutableStateFlow<Map<Long, ImageBitmap>>(emptyMap())
+    val thumbnails: StateFlow<Map<Long, ImageBitmap>> = _thumbnails.asStateFlow()
+
+    /** Draws the tab's visible page into a small bitmap for the tab grid. Blank pages and hidden views are skipped. */
+    fun captureThumbnail(id: Long) {
+        val webView = webViews[id] ?: return
+        val tab = _tabs.value.firstOrNull { it.id == id } ?: return
+        if (webView.width <= 0 || webView.height <= 0 || webView.parent == null || !UrlUtils.isHttpUrl(tab.url)) return
+        val bitmap = runCatching {
+            val scale = THUMBNAIL_WIDTH.toFloat() / webView.width
+            val height = (webView.height * scale).toInt().coerceIn(1, (THUMBNAIL_WIDTH * 1.6f).toInt())
+            Bitmap.createBitmap(THUMBNAIL_WIDTH, height, Bitmap.Config.RGB_565).also { bitmap ->
+                val canvas = Canvas(bitmap)
+                canvas.scale(scale, scale)
+                canvas.translate(-webView.scrollX.toFloat(), -webView.scrollY.toFloat())
+                webView.draw(canvas)
+            }
+        }.getOrNull() ?: return
+        _thumbnails.update { old ->
+            // Re-inserting moves the tab to the end: the oldest previews are dropped first.
+            val next = LinkedHashMap(old)
+            next.remove(id)
+            next[id] = bitmap.asImageBitmap()
+            while (next.size > MAX_THUMBNAILS) next.remove(next.keys.first())
+            next
+        }
+    }
 
     private val _barHidden = MutableStateFlow(false)
     val barHidden: StateFlow<Boolean> = _barHidden.asStateFlow()
@@ -325,6 +358,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
             )
         }
         cancelDialogsOf(id)
+        _thumbnails.update { it - id }
         webViews.remove(id)?.let { destroy(it, closing.isPrivate) }
         lastUsed.remove(id)
         errorUrls.remove(id)
@@ -397,7 +431,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     private fun activate(id: Long) {
         val tab = _tabs.value.firstOrNull { it.id == id } ?: return
-        if (_activeTabId.value != id) closeFind()
+        if (_activeTabId.value != id) {
+            closeFind()
+            captureThumbnail(_activeTabId.value) // the tab being left, as it looks now
+        }
         _activeTabId.value = id
         _currentWorkspaceId.value = tab.workspaceId
         activeByWorkspace[tab.workspaceId] = id
@@ -1263,5 +1300,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         const val PRIVATE_PROFILE = "private"
         const val PERSIST_DELAY_MS = 1_000L
         const val TOP_SITES_WINDOW_MS = 90L * 24 * 60 * 60 * 1000
+        const val THUMBNAIL_WIDTH = 360
+        const val MAX_THUMBNAILS = 30
     }
 }

@@ -1,6 +1,21 @@
 package com.voluene.monobrowser.ui.tabs
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import com.voluene.monobrowser.ui.browser.BrowserMenu
+import com.voluene.monobrowser.ui.browser.MenuEntry
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -8,7 +23,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,8 +54,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
@@ -94,6 +106,8 @@ fun TabSwitcher(
     onUndoClose: () -> Unit,
     onCloseAll: () -> Unit,
     onDismiss: () -> Unit,
+    /** Page previews (tab id -> bitmap); tabs without one show their monogram. */
+    thumbnails: Map<Long, ImageBitmap> = emptyMap(),
 ) {
     val scheme = MaterialTheme.colorScheme
     var optionsFor by remember { mutableStateOf<Long?>(null) }
@@ -108,7 +122,7 @@ fun TabSwitcher(
     var undoKey by remember { mutableIntStateOf(0) }
     LaunchedEffect(undoKey) { if (undoTitle != null) { delay(UNDO_MS); undoTitle = null } }
     val shown = remember(tabs, query) { tabs.filter { tabMatches(it, query) } }
-    val list = rememberLazyListState(initialFirstVisibleItemIndex = (tabs.indexOfFirst { it.id == activeId } - 1).coerceAtLeast(0))
+    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = (tabs.indexOfFirst { it.id == activeId } - 2).coerceAtLeast(0))
     val untitled = stringResource(R.string.tab_untitled)
 
     fun close(tab: Tab) {
@@ -127,6 +141,12 @@ fun TabSwitcher(
                 tabs.size.toString(), color = scheme.onBackground.copy(alpha = 0.55f), fontSize = 20.sp,
                 modifier = Modifier.padding(start = 8.dp).weight(1f),
             )
+            IconButton(onClick = onReopen, enabled = canReopen) {
+                Icon(
+                    com.voluene.monobrowser.ui.browser.MenuIcons.Restore, stringResource(R.string.tab_reopen_closed),
+                    tint = scheme.onBackground.copy(alpha = if (canReopen) 1f else 0.3f),
+                )
+            }
             IconButton(onClick = { confirmCloseAll = true }, enabled = tabs.isNotEmpty()) {
                 Icon(Icons.Default.Delete, stringResource(R.string.tabs_close_all), tint = scheme.onBackground)
             }
@@ -143,79 +163,24 @@ fun TabSwitcher(
         if (tabs.size >= FILTER_MIN_TABS || query.isNotEmpty()) {
             MonoTextField(query, { query = it }, stringResource(R.string.tabs_filter_hint), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
         }
-        LazyColumn(
-            Modifier.weight(1f).fillMaxWidth(), state = list,
-            verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        val columns = if (LocalConfiguration.current.screenWidthDp >= 600) 3 else 2
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.weight(1f).fillMaxWidth(), state = grid,
+            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         ) {
             items(shown, key = { it.id }) { tab ->
-                val bg = if (tab.isPrivate) scheme.onBackground else scheme.background
-                val fg = if (tab.isPrivate) scheme.background else scheme.onBackground
-                val active = tab.id == activeId
-                val borderWidth = if (active) 3.dp else 1.dp
                 SwipeToClose(onClose = { close(tab) }, label = stringResource(R.string.tab_close), modifier = Modifier.animateItem()) {
-                Column(Modifier.fillMaxWidth().background(bg).border(borderWidth, scheme.outline, RectangleShape)) {
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .combinedClickable(onClick = { onSwitch(tab.id) }, onLongClick = { optionsFor = if (optionsFor == tab.id) null else tab.id })
-                            .padding(start = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        val host = UrlUtils.shortUrlLabel(tab.url).substringBefore('/')
-                        Box(
-                            Modifier.size(36.dp).border(1.dp, fg, RectangleShape).then(if (active) Modifier.background(fg) else Modifier),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            val key = TopSites.hostKey(tab.url)
-                            Text(
-                                if (key != null) monogram(TopSites.label(key)) else "+",
-                                color = if (active) bg else fg, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                            )
-                        }
-                        Column(Modifier.weight(1f).padding(start = 12.dp, top = 10.dp, bottom = 10.dp)) {
-                            val badges = buildList {
-                                if (tab.isPrivate) add(stringResource(R.string.tab_private_badge))
-                                if (tab.desktopMode) add(stringResource(R.string.tab_desktop_badge))
-                                if (tab.neverSleep) add(stringResource(R.string.tab_never_sleep_badge))
-                                if (tab.sleeping) add(stringResource(R.string.tab_sleeping_badge))
-                            }
-                            if (badges.isNotEmpty()) {
-                                Text(badges.joinToString("  ·  "), color = fg, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Text(
-                                tab.title.ifBlank { host.ifBlank { untitled } },
-                                color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
-                            )
-                            if (tab.url.isNotBlank() && !UrlUtils.isAboutBlankUrl(tab.url)) {
-                                Text(UrlUtils.shortUrlLabel(tab.url), color = fg.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            if (tab.blockedCount > 0) {
-                                Text(stringResource(R.string.tab_blocked_count, tab.blockedCount), color = fg.copy(alpha = 0.7f), fontSize = 12.sp)
-                            }
-                        }
-                        IconButton(onClick = { close(tab) }) {
-                            Icon(Icons.Default.Close, stringResource(R.string.tab_close), tint = fg)
-                        }
-                    }
-                    if (optionsFor == tab.id) {
-                        Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Private tabs never sleep (their state cannot be saved), so the toggle is not offered.
-                            if (!tab.isPrivate) {
-                                MonoButton(
-                                    stringResource(if (tab.neverSleep) R.string.tab_never_sleep_on else R.string.tab_never_sleep_off),
-                                    { onSetNeverSleep(tab.id, !tab.neverSleep) },
-                                    Modifier.fillMaxWidth(), inverted = !tab.neverSleep,
-                                )
-                            }
-                            workspaces.workspaces.filter { it.id != tab.workspaceId }.forEach { target ->
-                                MonoButton(
-                                    stringResource(R.string.workspace_move_tab, "${monoGlyph(target.icon)} ${workspaces.names[target.id].orEmpty()}"),
-                                    { onMoveTabToWorkspace(tab.id, target.id); optionsFor = null },
-                                    Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-                }
+                    TabCard(
+                        tab = tab,
+                        active = tab.id == activeId,
+                        thumbnail = thumbnails[tab.id],
+                        untitled = untitled,
+                        onClick = { onSwitch(tab.id) },
+                        onLongClick = { optionsFor = tab.id },
+                        onClose = { close(tab) },
+                    )
                 }
             }
         }
@@ -236,12 +201,27 @@ fun TabSwitcher(
                 )
             }
         }
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MonoButton(stringResource(R.string.tab_new), onNewTab, Modifier.weight(1f))
-                MonoButton(stringResource(R.string.tab_new_private), onNewPrivateTab, Modifier.weight(1f), inverted = true)
+        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MonoButton(stringResource(R.string.tab_new), onNewTab, Modifier.weight(1f))
+            MonoButton(stringResource(R.string.tab_new_private), onNewPrivateTab, Modifier.weight(1f), inverted = true)
+        }
+    }
+
+    optionsFor?.let { id ->
+        tabs.firstOrNull { it.id == id }?.let { tab ->
+            val entries = buildList {
+                // Private tabs never sleep (their state cannot be saved), so the toggle is not offered.
+                if (!tab.isPrivate) {
+                    add(MenuEntry(if (tab.neverSleep) R.string.tab_never_sleep_on else R.string.tab_never_sleep_off) { onSetNeverSleep(tab.id, !tab.neverSleep) })
+                }
+                workspaces.workspaces.filter { it.id != tab.workspaceId }.forEach { target ->
+                    add(MenuEntry(R.string.workspace_move_tab, args = listOf("${monoGlyph(target.icon)} ${workspaces.names[target.id].orEmpty()}")) {
+                        onMoveTabToWorkspace(tab.id, target.id)
+                    })
+                }
+                add(MenuEntry(R.string.tab_close) { close(tab) })
             }
-            MonoButton(stringResource(R.string.tab_reopen_closed), onReopen, Modifier.fillMaxWidth(), enabled = canReopen)
+            BrowserMenu(entries, onDismiss = { optionsFor = null }, header = tab.title.ifBlank { UrlUtils.shortUrlLabel(tab.url).ifBlank { untitled } })
         }
     }
 
@@ -362,3 +342,76 @@ private fun SwipeToClose(onClose: () -> Unit, label: String, modifier: Modifier 
 }
 
 private const val THRESHOLD = 0.4f
+
+/**
+ * A tab in the grid: monogram + title + close on top, the page preview (greyscale, like the rest of the UI) below.
+ * Private tabs are inverted; the active tab has a heavy border; badges sit on the preview.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TabCard(
+    tab: Tab,
+    active: Boolean,
+    thumbnail: ImageBitmap?,
+    untitled: String,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val bg = if (tab.isPrivate) scheme.onBackground else scheme.background
+    val fg = if (tab.isPrivate) scheme.background else scheme.onBackground
+    val key = TopSites.hostKey(tab.url)
+    val host = UrlUtils.shortUrlLabel(tab.url).substringBefore('/')
+    Column(
+        Modifier.fillMaxWidth().aspectRatio(0.72f).background(bg)
+            .border(if (active) 3.dp else 1.dp, if (active) scheme.onBackground else scheme.outline, RectangleShape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        Row(Modifier.fillMaxWidth().height(40.dp).padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(20.dp).border(1.dp, fg, RectangleShape), contentAlignment = Alignment.Center) {
+                Text(if (key != null) monogram(TopSites.label(key)) else "+", color = fg, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                tab.title.ifBlank { host.ifBlank { untitled } }, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp),
+            )
+            Box(
+                Modifier.size(40.dp).clickable(onClickLabel = stringResource(R.string.tab_close), onClick = onClose),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Default.Close, stringResource(R.string.tab_close), tint = fg, modifier = Modifier.size(18.dp)) }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(fg.copy(alpha = 0.25f)))
+        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+            if (thumbnail != null) {
+                Image(
+                    thumbnail, contentDescription = null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter,
+                    colorFilter = GreyScale, modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (key != null) monogram(TopSites.label(key)) else "+", color = fg.copy(alpha = 0.8f), fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    if (host.isNotBlank()) {
+                        Text(host, color = fg.copy(alpha = 0.6f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            }
+            val badges = buildList {
+                if (tab.isPrivate) add(stringResource(R.string.tab_private_badge))
+                if (tab.desktopMode) add(stringResource(R.string.tab_desktop_badge))
+                if (tab.neverSleep) add(stringResource(R.string.tab_never_sleep_badge))
+                if (tab.sleeping) add(stringResource(R.string.tab_sleeping_badge))
+                if (tab.blockedCount > 0) add(stringResource(R.string.tab_blocked_count, tab.blockedCount).uppercase())
+            }
+            if (badges.isNotEmpty()) {
+                Text(
+                    badges.joinToString("  ·  "), color = bg, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp,
+                    maxLines = 2, modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).background(fg).padding(horizontal = 5.dp, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Page previews are shown without colour, like everything else in the app. */
+private val GreyScale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })

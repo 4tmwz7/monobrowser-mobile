@@ -116,6 +116,7 @@ fun BrowserScreen(manager: TabManager) {
     val workspaces by manager.workspaces.collectAsState()
     val currentWorkspaceId by manager.currentWorkspaceId.collectAsState()
     val glance by manager.glance.collectAsState()
+    val thumbnails by manager.thumbnails.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
     val tab = tabs.firstOrNull { it.id == activeId } ?: return
     var overlay by remember { mutableStateOf(Overlay.None) }
@@ -139,6 +140,8 @@ fun BrowserScreen(manager: TabManager) {
     LaunchedEffect(manager) { manager.paletteRequests.collect { overlay = Overlay.Palette } }
     // Update checks begin once the first frame is on screen (non-blocking, release builds only).
     LaunchedEffect(manager) { manager.updater.start(manager.settings) }
+    // The tab grid shows the current page as it is right now.
+    LaunchedEffect(overlay) { if (overlay == Overlay.Tabs) manager.captureThumbnail(activeId) }
 
     // System back, lowest to highest priority: page history, find bar, full-screen overlays.
     // Page history, then (a link opened in a new tab) close it and return to the source tab; otherwise back leaves
@@ -229,7 +232,7 @@ fun BrowserScreen(manager: TabManager) {
         MenuTile(R.string.menu_reader, MenuIcons.Article, enabled = isWeb && !tab.isLoading) { openReader() },
         MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
         MenuTile(R.string.menu_text_size, MenuIcons.TextSize) { textSizeOpen = true },
-        MenuTile(R.string.menu_reopen_short, Icons.Filled.Refresh, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
+        MenuTile(R.string.menu_reopen_short, MenuIcons.Restore, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
         MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() },
         MenuTile(R.string.menu_print, MenuIcons.Print, enabled = isWeb && !tab.isLoading) { printPage() },
         MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
@@ -459,6 +462,7 @@ fun BrowserScreen(manager: TabManager) {
                 onMoveTabToWorkspace = manager::moveTabToWorkspace,
                 onUndoClose = { manager.undoCloseTab() },
                 onCloseAll = { manager.closeAllTabs() },
+                thumbnails = thumbnails,
                 onDismiss = { overlay = Overlay.None },
             )
             Overlay.History -> HistoryScreen(
