@@ -1,7 +1,7 @@
 package com.voluene.monobrowser.ui.notes
 
 import android.content.Intent
-import androidx.activity.compose.BackHandler
+import com.voluene.monobrowser.ui.common.PredictiveBackContainer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -72,24 +72,22 @@ fun NotesScreen(
     var openId by remember { mutableStateOf(initialId) }
     DisposableEffect(repository) { onDispose { repository.flush() } }
     val id = openId
-    if (id == null) {
-        NotesList(
-            repository = repository,
-            onOpen = { openId = it },
-            onNew = { openId = repository.create() },
-            onClose = onClose,
-        )
-    } else {
-        NoteEditor(
-            repository = repository,
-            id = id,
-            onOpenUrl = onOpenUrl,
-            onBack = {
-                repository.flush()
-                repository.discardIfBlank(id)
-                openId = null
-            },
-        )
+    // The list stays underneath the editor, so a predictive back gesture reveals it.
+    NotesList(
+        repository = repository,
+        onOpen = { openId = it },
+        onNew = { openId = repository.create() },
+        onClose = onClose,
+    )
+    if (id != null) androidx.compose.runtime.key(id) {
+        val back = {
+            repository.flush()
+            repository.discardIfBlank(id)
+            openId = null
+        }
+        PredictiveBackContainer(onBack = back) {
+            NoteEditor(repository = repository, id = id, onOpenUrl = onOpenUrl, onBack = back)
+        }
     }
 }
 
@@ -136,7 +134,6 @@ private fun NoteEditor(repository: NotesRepository, id: String, onOpenUrl: (Stri
     var confirmDelete by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(id) { if (text.isBlank()) focus.requestFocus() }
-    BackHandler(onBack = onBack)
 
     Column(Modifier.fillMaxSize().background(scheme.background).statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {

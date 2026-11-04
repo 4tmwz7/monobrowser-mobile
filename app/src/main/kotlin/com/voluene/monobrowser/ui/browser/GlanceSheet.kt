@@ -3,7 +3,6 @@ package com.voluene.monobrowser.ui.browser
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.FrameLayout
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,7 +47,7 @@ fun GlanceSheet(
     onClose: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    BackHandler(onBack = onClose)
+    // System back (with its predictive animation) is handled by the caller's PredictiveBackContainer.
     Scrim(onClose) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HEIGHT_FRACTION)

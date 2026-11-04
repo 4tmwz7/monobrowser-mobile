@@ -27,7 +27,8 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MonoBrowser"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true">
         <!-- Cleartext is allowed because a browser must open http:// pages (the address bar prefers https). -->
 
         <activity

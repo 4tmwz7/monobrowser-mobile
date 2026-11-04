@@ -65,6 +65,8 @@ import com.voluene.monobrowser.data.TopSite
 import com.voluene.monobrowser.reader.ReaderArticle
 import com.voluene.monobrowser.ui.reader.ReaderScreen
 import com.voluene.monobrowser.ui.start.StartPage
+import com.voluene.monobrowser.ui.common.BackStyle
+import com.voluene.monobrowser.ui.common.PredictiveBackContainer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -379,6 +381,11 @@ fun BrowserScreen(manager: TabManager) {
             }
             if (!toolbarTop) bar()
         } }
+        // Full-screen overlays (and the menu sheet) follow the predictive back gesture.
+        if (overlay != Overlay.None) androidx.compose.runtime.key(overlay) { PredictiveBackContainer(
+            onBack = { overlay = Overlay.None },
+            style = if (overlay == Overlay.Menu) BackStyle.SHEET else BackStyle.PAGE,
+        ) {
         when (overlay) {
             Overlay.None -> Unit
             Overlay.Menu -> BrowserMenuGrid(menuTiles, menuInfo, onDismiss = { overlay = Overlay.None })
@@ -464,6 +471,7 @@ fun BrowserScreen(manager: TabManager) {
                 )
             }
         }
+        } }
         linkMenu?.let { state ->
             val entries = LinkActions.menu(state.url, state.sourceIsPrivate).map { action ->
                 MenuEntry(linkMenuLabel(action)) { if (action == LinkMenuAction.SHARE) shareText(state.url) else manager.runLinkAction(state, action) }
@@ -499,13 +507,13 @@ fun BrowserScreen(manager: TabManager) {
             )
         }
         glance?.let { g ->
-            GlanceSheet(
+            PredictiveBackContainer(onBack = manager::closeGlance, style = BackStyle.SHEET) { GlanceSheet(
                 glance = g,
                 webView = manager.glanceWebView(),
                 onOpenInTab = manager::expandGlance,
                 onOpenInBackground = manager::backgroundGlance,
                 onClose = manager::closeGlance,
-            )
+            ) }
         }
         if (creatingWorkspace) {
             WorkspaceEditorDialog(

@@ -1,6 +1,6 @@
 package com.voluene.monobrowser.ui.settings
 
-import androidx.activity.compose.BackHandler
+import com.voluene.monobrowser.ui.common.PredictiveBackContainer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,14 +75,19 @@ private const val WEBSITE = "https://monobrowser.vercel.app"
 @Composable
 fun SettingsScreen(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: () -> Unit) {
     var page by remember { mutableStateOf(Page.Main) }
-    BackHandler(enabled = page != Page.Main) { page = Page.Main }
     val back = { page = Page.Main }
-    when (page) {
-        Page.Main -> MainPage(manager, onOpenUrl, onClose, open = { page = it })
-        Page.Theme -> ThemePage(manager, back)
-        Page.Exceptions -> ExceptionsPage(manager, back)
-        Page.Permissions -> PermissionsPage(manager, back)
-        Page.Licenses -> LicensesPage(back)
+    // The main page stays underneath, so a predictive back gesture on a sub-page reveals it.
+    MainPage(manager, onOpenUrl, onClose, open = { page = it })
+    if (page != Page.Main) androidx.compose.runtime.key(page) {
+        PredictiveBackContainer(onBack = back) {
+            when (page) {
+                Page.Main -> Unit
+                Page.Theme -> ThemePage(manager, back)
+                Page.Exceptions -> ExceptionsPage(manager, back)
+                Page.Permissions -> PermissionsPage(manager, back)
+                Page.Licenses -> LicensesPage(back)
+            }
+        }
     }
 }
 
