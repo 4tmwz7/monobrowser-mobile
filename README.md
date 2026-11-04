@@ -51,7 +51,8 @@ Browsing
 - Start page on new tabs: clock, search, pinned and most visited sites (long-press a tile: pin / remove), reading list, recently closed tabs
 - Address bar shows the site with a lock; tap the lock for site information (certificate, ad blocker and desktop site for the site, remembered permissions)
 - Search suggestions (Google, DuckDuckGo, Bing, Ecosia; never in private tabs), recent pages in the empty palette; also Brave Search and Startpage
-- Reader view (article text only; text size, serif/sans) and a reading list saved for offline reading
+- Reader view (article text only; text size, serif/sans; offered in the address bar on article pages), read aloud (text-to-speech, page language, speed), and a reading list saved for offline reading
+- Translate page (Google Translate, into the phone's language)
 - Desktop site per tab, page text size, pinch-to-zoom, print / save as PDF, full screen video
 - `target=_blank` / `window.open` open new tabs (pop-ups without a tap are blocked)
 - `blob:` downloads (generated files); messages with actions ("Downloaded x · Open", "Undo", "Switch")
@@ -77,8 +78,15 @@ Look and feel
 - Predictive back (Android 14+): overlays shrink and reveal what is underneath while you swipe; back to the home screen preview when the app has nothing to go back to
 - Animated overlays; swipe the tab list rows to close (with Undo); swipe up on the address bar for the tab list; long-press the tab counter for a new tab
 - Back on a tab opened from a link returns to the tab it came from
+- Search in settings; a "Gestures and shortcuts" page (also in the first-run flow)
 - Launcher shortcuts (New tab, Private tab), Quick Settings tile (private tab), "Search in MonoBrowser" in the text selection menu, share links or text to the browser
 - English and Polish, launcher icon identical to the desktop app (adaptive + themed)
+
+Performance
+- Page previews are copied from the screen on the GPU (PixelCopy), stored at half size, dropped under memory pressure
+- Tabs that are not on screen are paused and their renderers deprioritised; in the background JavaScript timers stop - unless a page plays media
+- Load progress and blocked-request counts do not recompose the whole UI; palette search keeps a per-list index (well under 1 ms per keystroke over thousands of bookmarks)
+- Baseline profile for the app's own code; bookmarks load off the main thread at startup
 
 ## Status
 
