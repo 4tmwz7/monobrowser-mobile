@@ -70,7 +70,8 @@ class RustAdBlocker internal constructor(
             Log.e(NativeAdblock.TAG, "check failed", t)
             false
         }
-        if (hit) Log.d(NativeAdblock.TAG, "blocked #${blocked.incrementAndGet()} [${resourceType.name}] $url")
+        // Debug builds only: in release this ran (string building + a logcat write) for every blocked request.
+        if (hit && com.voluene.monobrowser.BuildConfig.DEBUG) Log.d(NativeAdblock.TAG, "blocked #${blocked.incrementAndGet()} [${resourceType.name}] $url")
         return hit
     }
 

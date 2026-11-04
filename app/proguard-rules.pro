@@ -5,3 +5,8 @@
 -keepclassmembers class com.voluene.monobrowser.adblock.RustAdBlocker$Bridge { @android.webkit.JavascriptInterface <methods>; }
 # blob: downloads: JS bridge (method names are called from page scripts)
 -keepclassmembers class com.voluene.monobrowser.browser.TabManager$BlobBridge { @android.webkit.JavascriptInterface <methods>; }
+# Release builds drop debug / verbose logging (and the work of building the messages).
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+}
