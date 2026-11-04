@@ -442,6 +442,11 @@ fun BrowserScreen(manager: TabManager) {
     val barBg = if (tab.isPrivate) scheme.onBackground else scheme.background
 
     Box(Modifier.fillMaxSize().background(scheme.background)) {
+        // The tab whose media plays (or is paused, to be resumed from the notification) while another tab is shown
+        // stays in the window, invisible under everything: a WebView taken out of the window counts as hidden for
+        // Chromium, which then stops the playback.
+        val parkedId = media?.tabId?.takeIf { it != activeId && it != floatingId && !pip }
+        parkedId?.let { id -> manager.liveWebView(id)?.let { ParkedWebView(it) } }
         // Keyed by the toolbar position: switching it live must rebuild the page area (otherwise the WebView keeps a stale
         // size/offset and a blank band or an overlap with the status bar remains).
         androidx.compose.runtime.key(toolbarTop) { Column(Modifier.fillMaxSize()) {

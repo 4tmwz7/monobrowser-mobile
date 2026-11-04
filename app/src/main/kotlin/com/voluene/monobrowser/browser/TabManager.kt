@@ -1732,6 +1732,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         }
     }
 
+    /** A tab's WebView if it is live (never wakes a sleeping tab). */
+    fun liveWebView(id: Long): WebView? = webViews[id]
+
     /** The floating tab's WebView (for the window); null when there is none. */
     fun floatingWebView(): WebView? = _floating.value?.let { webViews[it] }
 

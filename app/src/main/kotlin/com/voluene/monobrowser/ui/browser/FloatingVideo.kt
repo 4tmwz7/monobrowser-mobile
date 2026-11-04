@@ -182,3 +182,25 @@ fun FloatingVideo(
         }
     }
 }
+
+/** Keeps [webView] attached to the window (full size, so the page does not reflow) without drawing it. */
+@Composable
+fun ParkedWebView(webView: WebView) {
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            // Never touchable: taps that nothing above takes (status bar strip, gaps) must not reach the hidden page.
+            object : FrameLayout(ctx) {
+                override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean = false
+            }.apply { alpha = 0f; importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
+        },
+        update = { layout ->
+            if (layout.getChildAt(0) !== webView) {
+                layout.removeAllViews()
+                (webView.parent as? ViewGroup)?.removeView(webView)
+                layout.addView(webView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            }
+        },
+        onRelease = { it.removeAllViews() },
+    )
+}
