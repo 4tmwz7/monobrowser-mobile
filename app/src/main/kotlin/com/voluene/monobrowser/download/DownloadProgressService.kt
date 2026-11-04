@@ -101,6 +101,8 @@ class DownloadProgressService : Service() {
         }
         // Ask to be shown as a Live Update (status bar chip, Now Bar); the key NotificationCompat uses as well.
         builder.extras.putBoolean("android.requestPromotedOngoing", true)
+        // One UI fills its Now Bar and Live Notification card from its own extras, not from the Android ones.
+        if (SamsungLive.available) builder.extras.putAll(SamsungLive.progressExtras(this, title, text, summary.percent, R.drawable.ic_notification_download))
         val notification = builder.build()
         if (!foreground) {
             runCatching {
@@ -151,4 +153,33 @@ object DownloadProgress {
         val percent = if (known && total > 0) (done * 100 / total).toInt().coerceIn(0, 100) else -1
         return Summary(items.firstOrNull()?.title.orEmpty(), done, total, percent, items.map { it.id })
     }
+}
+
+/**
+ * Samsung One UI Live Notifications (Now Bar, lock screen, status bar chip): One UI shows its own fields, not the
+ * Android 16 Live Update ones; without them the Now Bar shows only the app name. Undocumented keys, as used by
+ * other apps; ignored elsewhere. The manifest declares `com.samsung.android.support.ongoing_activity`.
+ */
+object SamsungLive {
+    val available: Boolean get() = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+
+    private const val STYLE_PROGRESS = 2
+
+    /** [percent] -1 = unknown size (no bar, the bytes only). */
+    fun progressExtras(context: Context, title: String, text: String, percent: Int, icon: Int): android.os.Bundle =
+        android.os.Bundle().apply {
+            val chip = if (percent >= 0) "$percent%" else text
+            val detail = if (percent >= 0) "$percent%  \u00b7  $text" else text
+            putInt("android.ongoingActivityNoti.style", STYLE_PROGRESS)
+            putString("android.ongoingActivityNoti.primaryInfo", title)
+            putString("android.ongoingActivityNoti.secondaryInfo", detail)
+            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", title)
+            putString("android.ongoingActivityNoti.nowbarSecondaryInfo", detail)
+            putString("android.ongoingActivityNoti.chipExpandedText", chip)
+            putParcelable("android.ongoingActivityNoti.chipIcon", android.graphics.drawable.Icon.createWithResource(context, icon))
+            if (percent >= 0) {
+                putInt("android.ongoingActivityNoti.progress", percent)
+                putInt("android.ongoingActivityNoti.progressMax", 100)
+            }
+        }
 }

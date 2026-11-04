@@ -36,6 +36,11 @@
         android:theme="@style/Theme.MonoBrowser"
         android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true">
+        <!-- Samsung One UI: this app posts Live Notifications (Now Bar) for downloads. -->
+        <meta-data
+            android:name="com.samsung.android.support.ongoing_activity"
+            android:value="true" />
+
         <!-- Cleartext is allowed because a browser must open http:// pages (the address bar prefers https). -->
 
         <activity
