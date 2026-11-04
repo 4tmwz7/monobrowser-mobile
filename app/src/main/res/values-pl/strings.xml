@@ -473,7 +473,14 @@
     <string name="widget_description">Szukaj lub wpisz adres albo otwórz kartę prywatną z ekranu głównego</string>
     <string name="settings_strip_tracking">Usuwaj śledzenie z linków</string>
     <string name="settings_strip_tracking_hint">utm_*, fbclid, gclid i podobne znikają z linków, które otwierasz, kopiujesz i udostępniasz</string>
-    <string name="read_aloud_next">Następny akapit</string>
-    <string name="read_aloud_previous">Poprzedni akapit</string>
-    <string name="read_aloud_stop">Zatrzymaj czytanie</string>
+    <string name="media_channel">Multimedia ze stron</string>
+    <string name="media_play">Odtwórz</string>
+    <string name="media_pause">Wstrzymaj</string>
+    <string name="media_next">Następny</string>
+    <string name="media_previous">Poprzedni</string>
+    <string name="media_stop">Zatrzymaj</string>
+    <string name="downloads_channel">Postęp pobierania</string>
+    <string name="downloads_count">Pobierane pliki: %1$d</string>
+    <string name="downloads_progress">%1$s z %2$s</string>
+    <string name="downloads_cancel">Anuluj</string>
 </resources>

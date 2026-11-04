@@ -54,6 +54,8 @@ Browsing
 - Reader view (article text only; text size, serif/sans; offered in the address bar on article pages), read aloud (text-to-speech, page language, speed), and a reading list saved for offline reading
 - Translate page (Google Translate, into the phone's language)
 - Read aloud keeps going after reader view closes and is a regular media session: controls in the notification, on the lock screen, in Samsung's Now Bar (One UI 7+) and on a paired watch (Galaxy Watch media controls)
+- Audio / video playing in pages becomes a regular media session like a music app's: cover (the page's media artwork or og:image), title, artist, previous / play-pause / next / stop, seek bar; in the notification, on the lock screen, in Now Bar and on a paired watch; keeps playing in the background (private tabs: no title or cover on the lock screen)
+- Android 16+: download progress as a Live Update (progress bar and percentage chip, shown by One UI in the Now Bar)
 - Home screen search widget (search bar + private tab)
 - Tracking parameters (utm_*, fbclid, gclid ...) are removed from links you open, copy and share
 - Desktop site per tab, page text size, pinch-to-zoom, print / save as PDF, full screen video

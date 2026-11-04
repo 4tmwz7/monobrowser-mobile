@@ -43,7 +43,11 @@ class DownloadRepository(context: Context) {
         val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle(fileName)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            // Android 16+: progress is our Live Update (DownloadProgressService); the system only reports the result.
+            .setNotificationVisibility(
+                if (DownloadProgressService.supported) DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_ONLY_COMPLETION
+                else DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
+            )
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
         if (!mimeType.isNullOrBlank()) request.setMimeType(mimeType)
         if (!cookie.isNullOrBlank()) request.addRequestHeader("Cookie", cookie)

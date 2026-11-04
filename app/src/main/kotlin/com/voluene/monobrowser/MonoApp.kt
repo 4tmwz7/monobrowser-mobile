@@ -12,6 +12,9 @@ class MonoApp : Application() {
     /** Read aloud: process-wide, so reading continues after reader view closes (see ReadAloudService). */
     val readAloud: com.voluene.monobrowser.reader.ReadAloud by lazy { com.voluene.monobrowser.reader.ReadAloud(this) }
 
+    /** Media playing in pages, for WebMediaService. */
+    val webMedia: com.voluene.monobrowser.media.WebMediaHub by lazy { com.voluene.monobrowser.media.WebMediaHub(this) }
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(LocaleHelper.wrap(base)) // Android < 13: per-app language
     }

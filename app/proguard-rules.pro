@@ -10,3 +10,5 @@
     public static int d(...);
     public static int v(...);
 }
+# Media in pages: JS bridge (method names are called from page scripts)
+-keepclassmembers class com.voluene.monobrowser.browser.TabManager$MediaBridge { @android.webkit.JavascriptInterface <methods>; }

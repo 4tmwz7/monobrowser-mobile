@@ -89,7 +89,7 @@ import java.util.Locale
  * used inactive tabs are saved to disk and destroyed ("sleeping") and rebuilt when shown again.
  * Normal tabs are persisted (`session.json` + a WebView state blob per tab); private tabs never touch disk.
  */
-class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
+class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, com.voluene.monobrowser.media.WebMediaControl {
     /** User preferences (`settings.json`). */
     private val settingsFile = StateFile(
         File(app.filesDir, "settings.json"), AppSettings(), SettingsCodec::decode, SettingsCodec::encode, viewModelScope,
@@ -326,7 +326,11 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         if (s.textZoom != before.textZoom) webViews.values.forEach { it.settings.textZoom = s.textZoom }
     }
 
+    /** Media playing in pages, shared with WebMediaService (notification, Now Bar, lock screen, watch). */
+    private val webMedia = (app as com.voluene.monobrowser.MonoApp).webMedia
+
     init {
+        webMedia.control = this
         ContextCompat.registerReceiver(
             app, downloadReceiver, android.content.IntentFilter(android.app.DownloadManager.ACTION_DOWNLOAD_COMPLETE),
             ContextCompat.RECEIVER_EXPORTED, // sent by the system's download provider
@@ -440,6 +444,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         cancelDialogsOf(id)
         _thumbnails.update { it - id }
         _loadProgress.update { it - id }
+        webMedia.clear(id)
         pendingBlocked.remove(id)
         webViews.remove(id)?.let { destroy(it, closing.isPrivate) }
         lastUsed.remove(id)
@@ -665,6 +670,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     private fun sleep(id: Long) {
         val webView = webViews.remove(id) ?: return
+        webMedia.clear(id)
         val tab = _tabs.value.firstOrNull { it.id == id }
         if (tab != null && !tab.isPrivate) saveTabState(id, webView)
         cancelDialogsOf(id)
@@ -725,6 +731,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         adBlocker.attach(webView) // adblock: cosmetic
         webView.webChromeClient = MonoWebChromeClient(tab.id, this, this)
         webView.addJavascriptInterface(BlobBridge(tab.id), BlobDownload.BRIDGE)
+        webView.addJavascriptInterface(MediaBridge(tab.id), com.voluene.monobrowser.media.WebMediaHub.BRIDGE)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            runCatching { WebViewCompat.addDocumentStartJavaScript(webView, com.voluene.monobrowser.media.WebMediaHub.SCRIPT, setOf("*")) }
+        }
         webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             startDownload(tab.id, url, userAgent, contentDisposition, mimeType)
         }
@@ -783,6 +793,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     override fun onCleared() {
         runCatching { getApplication<Application>().unregisterReceiver(downloadReceiver) }
+        if (webMedia.control === this) webMedia.control = null
         flush()
         webViews.values.forEach { it.destroy() }
         webViews.clear()
@@ -908,6 +919,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     override fun onPageStarted(tabId: Long, url: String) {
         if (errorUrls[tabId] != url) errorUrls.remove(tabId)
         pendingBlocked[tabId]?.set(0) // counts of the previous page
+        webMedia.clear(tabId) // a new page: the old one's media is gone
         val keepTitle = errorUrls[tabId] == url
         _loadProgress.update { it + (tabId to 0) }
         update(tabId) { it.copy(url = url, title = if (keepTitle) it.title else "", blockedCount = 0, progress = 0, readerAvailable = false) }
@@ -916,6 +928,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     override fun onPageFinished(tabId: Long, url: String) {
         update(tabId) { it.copy(url = url, progress = 100) }
+        // Without document-start scripts the media script goes in when the page has loaded.
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            webViews[tabId]?.let { runCatching { it.evaluateJavascript(com.voluene.monobrowser.media.WebMediaHub.SCRIPT, null) } }
+        }
         probeReader(tabId, url)
         val tab = tab(tabId)
         if (tab != null && !tab.isPrivate && tabId != _glance.value?.id && UrlUtils.isHttpUrl(url) && tabId !in errorUrls) {
@@ -1518,7 +1534,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
                 val referer = webViews[tabId]?.url
                 runCatching {
                     downloads.enqueue(url, userAgent, contentDisposition, mimeType, cookiesFor(tabId, url), referer)
-                }.onSuccess { (_, name) -> toast(R.string.download_started, name) }
+                }.onSuccess { (_, name) ->
+                    toast(R.string.download_started, name)
+                    com.voluene.monobrowser.download.DownloadProgressService.start(getApplication())
+                }
                     .onFailure { toast(R.string.download_failed) }
             }
             else -> toast(R.string.download_failed)
@@ -1552,6 +1571,61 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         if (pendingBlobs[token]?.tabId != tabId) return
         pendingBlobs.remove(token)
         toast(if (reason == "size") R.string.download_too_large else R.string.download_failed)
+    }
+
+    // --- Media playing in pages ---
+
+    /** The page reports play / pause (WebMediaHub.SCRIPT); called on a WebView thread. */
+    private inner class MediaBridge(private val tabId: Long) {
+        @JavascriptInterface
+        fun state(
+            playing: Boolean, title: String, artist: String, canNext: Boolean, canPrevious: Boolean,
+            artwork: String, positionMs: Double, durationMs: Double, rate: Double,
+        ) {
+            val at = SystemClock.elapsedRealtime()
+            mainHandler.post {
+                onWebMedia(tabId, playing, title, artist, canNext, canPrevious, artwork, positionMs.toLong(), durationMs.toLong(), at, rate.toFloat())
+            }
+        }
+    }
+
+    private fun onWebMedia(
+        tabId: Long, playing: Boolean, title: String, artist: String, canNext: Boolean, canPrevious: Boolean,
+        artwork: String, positionMs: Long, durationMs: Long, at: Long, rate: Float,
+    ) {
+        val tab = tab(tabId) ?: return
+        val current = webMedia.state.value
+        // A page that pauses does not take over the controls from another one that plays.
+        if (!playing && current?.tabId != tabId) return
+        webMedia.update(
+            com.voluene.monobrowser.media.WebMediaState(
+                tabId, playing, title.take(200).ifBlank { tab.title }, artist.take(100), canNext, canPrevious, tab.isPrivate,
+                artworkUrl = artwork.take(2048).takeIf { UrlUtils.isHttpUrl(it) }.orEmpty(),
+                positionMs = positionMs.coerceAtLeast(0), durationMs = durationMs.coerceAtLeast(0), updatedAt = at,
+                rate = rate.takeIf { it in 0.1f..16f } ?: 1f,
+            ),
+        )
+        if (playing) {
+            val app = getApplication<Application>()
+            // Allowed while the app is in front (the usual case: the user pressed play); otherwise already running.
+            runCatching { ContextCompat.startForegroundService(app, android.content.Intent(app, com.voluene.monobrowser.WebMediaService::class.java)) }
+        }
+    }
+
+    override fun play(tabId: Long) = mediaCommand(tabId, "window.__monoMediaPlay && window.__monoMediaPlay()")
+    override fun pause(tabId: Long) = mediaCommand(tabId, "window.__monoMediaPause && window.__monoMediaPause()")
+    override fun skip(tabId: Long, forward: Boolean) = mediaCommand(tabId, "window.__monoMediaSkip && window.__monoMediaSkip($forward)")
+    override fun seekTo(tabId: Long, positionMs: Long) =
+        mediaCommand(tabId, "window.__monoMediaSeek && window.__monoMediaSeek(${positionMs.coerceAtLeast(0)})")
+
+    private fun mediaCommand(tabId: Long, script: String) {
+        mainHandler.post {
+            val webView = webViews[tabId] ?: return@post
+            // Commands from the lock screen / Now Bar arrive while the app is in the background: wake the page first.
+            webView.resumeTimers()
+            webView.onResume()
+            runCatching { webView.evaluateJavascript(script, null) }
+        }
     }
 
     /** JavaScript side of `blob:` downloads; calls arrive on a WebView thread and are handed to the main thread. */

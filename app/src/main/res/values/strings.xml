@@ -473,7 +473,14 @@
     <string name="widget_description">Search or enter an address, or open a private tab, from the home screen</string>
     <string name="settings_strip_tracking">Remove tracking from links</string>
     <string name="settings_strip_tracking_hint">utm_*, fbclid, gclid and similar are dropped from links you open, copy and share</string>
-    <string name="read_aloud_next">Next paragraph</string>
-    <string name="read_aloud_previous">Previous paragraph</string>
-    <string name="read_aloud_stop">Stop reading</string>
+    <string name="media_channel">Media from pages</string>
+    <string name="media_play">Play</string>
+    <string name="media_pause">Pause</string>
+    <string name="media_next">Next</string>
+    <string name="media_previous">Previous</string>
+    <string name="media_stop">Stop</string>
+    <string name="downloads_channel">Download progress</string>
+    <string name="downloads_count">%1$d downloads</string>
+    <string name="downloads_progress">%1$s of %2$s</string>
+    <string name="downloads_cancel">Cancel</string>
 </resources>
