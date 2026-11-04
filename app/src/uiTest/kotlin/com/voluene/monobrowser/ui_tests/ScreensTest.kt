@@ -126,6 +126,10 @@ class ScreensTest {
     )!!
 
     @Test fun reader() = shot("reader") { ReaderScreen(article, 18, true, {}, {}, {}) }
+    @Test fun readerSpeaking() = shot("reader_speaking") {
+        ReaderScreen(article, 18, true, {}, {}, {}, saved = true, readAloud = com.voluene.monobrowser.reader.ReadAloudState(speaking = true, block = 1, rate = 1.25f))
+    }
+
     @Test fun readerDarkSans() = shot("reader_dark_sans", dark = true) { ReaderScreen(article, 16, false, {}, {}, {}) }
     @Test fun tabs() = shot("tabs") {
         val ws = com.voluene.monobrowser.ui.tabs.WorkspaceUiState(

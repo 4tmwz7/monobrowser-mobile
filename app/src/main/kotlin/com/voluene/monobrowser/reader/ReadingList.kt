@@ -32,6 +32,7 @@ object ReadingListCodec {
         val byline: String = "",
         val savedAt: Long = 0,
         val blocks: List<StoredBlock> = emptyList(),
+        val lang: String = "",
     )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -43,7 +44,7 @@ object ReadingListCodec {
         Stored.serializer(),
         Stored(
             url = article.url, title = article.title, site = article.site, byline = article.byline, savedAt = savedAt,
-            blocks = article.blocks.map { StoredBlock(it.kind.name, it.text) },
+            blocks = article.blocks.map { StoredBlock(it.kind.name, it.text) }, lang = article.language,
         ),
     )
 
@@ -54,7 +55,7 @@ object ReadingListCodec {
         val blocks = stored.blocks.map { b ->
             ReaderBlock(BlockKind.entries.firstOrNull { it.name == b.k } ?: BlockKind.PARAGRAPH, b.t)
         }
-        return ReaderArticle(stored.title, stored.site, stored.byline, stored.url, blocks) to stored.savedAt
+        return ReaderArticle(stored.title, stored.site, stored.byline, stored.url, blocks, stored.lang) to stored.savedAt
     }
 }
 

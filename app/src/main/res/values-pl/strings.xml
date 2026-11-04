@@ -440,4 +440,10 @@
     <string name="start_unpin">Odepnij od strony startowej</string>
     <string name="popup_blocked">Zablokowano wyskakujące okno</string>
     <string name="tab_history">Historia karty</string>
+    <string name="reader_listen">Czytaj na głos</string>
+    <string name="reader_pause">Wstrzymaj czytanie</string>
+    <string name="reader_text_options">Opcje tekstu</string>
+    <string name="reader_speed">Prędkość czytania</string>
+    <string name="menu_translate">Przetłumacz stronę</string>
+    <string name="translate_page">Przetłumacz stronę</string>
 </resources>

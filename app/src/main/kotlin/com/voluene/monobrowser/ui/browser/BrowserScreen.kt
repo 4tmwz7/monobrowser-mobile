@@ -290,6 +290,7 @@ fun BrowserScreen(manager: TabManager) {
                 "wersja komputerowa desktop site user agent pc",
             ))
             add(PaletteAction(PaletteActionId.PRINT, stringResource(R.string.menu_print), "drukuj print pdf zapisz save"))
+            add(PaletteAction(PaletteActionId.TRANSLATE, stringResource(R.string.translate_page), "tlumacz przetlumacz translate jezyk language"))
         }
         add(PaletteAction(PaletteActionId.TEXT_SIZE, stringResource(R.string.menu_text_size), "rozmiar tekstu czcionka text size font zoom powiekszenie"))
         add(PaletteAction(PaletteActionId.READING_LIST, stringResource(R.string.reading_list), "do przeczytania czytaj pozniej offline reading list read later zapisane"))
@@ -366,6 +367,7 @@ fun BrowserScreen(manager: TabManager) {
             PaletteActionId.PRINT -> printPage()
             PaletteActionId.TEXT_SIZE -> textSizeOpen = true
             PaletteActionId.READING_LIST -> overlay = Overlay.ReadingList
+            PaletteActionId.TRANSLATE -> manager.translatePage(tab.id)
             PaletteActionId.SAVE_FOR_LATER -> manager.saveForLater(tab.id) { overlay = Overlay.ReadingList }
         }
     }
@@ -545,7 +547,17 @@ fun BrowserScreen(manager: TabManager) {
                 onClose = { overlay = Overlay.None },
             )
             Overlay.Reader -> readerArticle?.let { article ->
+                // The speech engine starts on the first "read aloud" and shuts down with the reader.
+                var speech by remember(article) { mutableStateOf<com.voluene.monobrowser.reader.ReadAloud?>(null) }
+                androidx.compose.runtime.DisposableEffect(article) { onDispose { speech?.shutdown() } }
+                val speechState = speech?.state?.collectAsState()?.value ?: com.voluene.monobrowser.reader.ReadAloudState()
                 ReaderScreen(
+                    readAloud = speechState,
+                    onPlayPause = {
+                        val engine = speech ?: com.voluene.monobrowser.reader.ReadAloud(context).also { speech = it }
+                        if (speechState.speaking) engine.pause() else engine.play(article, engine.resumeFrom)
+                    },
+                    onRate = { (speech ?: com.voluene.monobrowser.reader.ReadAloud(context).also { speech = it }).cycleRate(article) },
                     article = article,
                     fontSize = settings.readerFontSize,
                     serif = settings.readerSerif,
@@ -603,6 +615,7 @@ fun BrowserScreen(manager: TabManager) {
                 }
                 add(MenuEntry(R.string.address_paste_go, enabled = hasClip) { pasteAndGo() })
                 add(MenuEntry(R.string.address_edit) { overlay = Overlay.Palette })
+                if (isWeb) add(MenuEntry(R.string.translate_page) { manager.translatePage(tab.id) })
                 if (isWeb) add(MenuEntry(R.string.address_share) { shareLink() })
             }
             BrowserMenu(entries, onDismiss = { addressMenuOpen = false }, header = if (isWeb) tab.url else null)

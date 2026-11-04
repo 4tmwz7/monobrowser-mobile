@@ -23,6 +23,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -66,7 +69,12 @@ fun ReaderScreen(
     onToggleSave: () -> Unit = {},
     /** Opening a saved article offline: the site label opens the original page. */
     onOpenOriginal: (() -> Unit)? = null,
+    /** Read aloud; null hides it (no speech engine). */
+    readAloud: com.voluene.monobrowser.reader.ReadAloudState? = null,
+    onPlayPause: () -> Unit = {},
+    onRate: () -> Unit = {},
 ) {
+    var textOptions by remember { mutableStateOf(false) }
     val scheme = MaterialTheme.colorScheme
     val fg = scheme.onBackground
     val family = if (serif) FontFamily.Serif else FontFamily.SansSerif
@@ -78,6 +86,16 @@ fun ReaderScreen(
             val last = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf 0f
             if (last.index >= info.totalItemsCount - 1 && last.offset + last.size <= info.viewportEndOffset) 1f
             else (list.firstVisibleItemIndex.toFloat() / total).coerceIn(0f, 1f)
+        }
+    }
+
+    // Keep the block being read on screen.
+    val spokenBlock = readAloud?.takeIf { it.speaking }?.block ?: -1
+    androidx.compose.runtime.LaunchedEffect(spokenBlock) {
+        if (spokenBlock >= 0) {
+            val item = spokenBlock + 1 // after the header item
+            val visible = list.layoutInfo.visibleItemsInfo.map { it.index }
+            if (item !in visible.drop(1).dropLast(1)) list.animateScrollToItem(item)
         }
     }
 
@@ -101,13 +119,35 @@ fun ReaderScreen(
                     )
                 }
             }
-            ToolButton("A−", stringResource(R.string.reader_smaller), fontSize > AppSettings.READER_FONT_RANGE.first) { onFontSize(fontSize - 2) }
-            ToolButton("A+", stringResource(R.string.reader_larger), fontSize < AppSettings.READER_FONT_RANGE.last) { onFontSize(fontSize + 2) }
-            ToolButton(
-                "Aa", stringResource(if (serif) R.string.reader_font_sans else R.string.reader_font_serif), true,
-                fontFamily = if (serif) FontFamily.SansSerif else FontFamily.Serif,
-            ) { onSerif(!serif) }
+            if (readAloud != null && readAloud.available) {
+                IconButton(onClick = onPlayPause) {
+                    Icon(
+                        if (readAloud.speaking) com.voluene.monobrowser.ui.browser.MenuIcons.Pause else Icons.Default.PlayArrow,
+                        stringResource(if (readAloud.speaking) R.string.reader_pause else R.string.reader_listen), tint = fg,
+                    )
+                }
+            }
+            ToolButton("Aa", stringResource(R.string.reader_text_options), true, active = textOptions) { textOptions = !textOptions }
             IconButton(onClick = onClose) { Icon(Icons.Default.Close, stringResource(R.string.reader_close), tint = fg) }
+        }
+        // Second row: text size, typeface, reading speed.
+        if (textOptions) {
+            Row(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                ToolButton("A\u2212", stringResource(R.string.reader_smaller), fontSize > AppSettings.READER_FONT_RANGE.first) { onFontSize(fontSize - 2) }
+                Text("$fontSize", color = fg, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp))
+                ToolButton("A+", stringResource(R.string.reader_larger), fontSize < AppSettings.READER_FONT_RANGE.last) { onFontSize(fontSize + 2) }
+                Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(24.dp).background(scheme.outlineVariant))
+                ToolButton("Serif", stringResource(R.string.reader_font_serif), true, active = serif, fontFamily = FontFamily.Serif, width = 64.dp) { onSerif(true) }
+                ToolButton("Sans", stringResource(R.string.reader_font_sans), true, active = !serif, width = 56.dp) { onSerif(false) }
+                if (readAloud != null && readAloud.available) {
+                    Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(24.dp).background(scheme.outlineVariant))
+                    val rate = readAloud.rate
+                    ToolButton(
+                        (if (rate % 1f == 0f) "${rate.toInt()}" else "$rate") + "\u00d7", stringResource(R.string.reader_speed), true, width = 56.dp,
+                    ) { onRate() }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(scheme.outlineVariant))
         }
         // Reading progress.
         Box(Modifier.fillMaxWidth().height(1.dp).background(scheme.outlineVariant)) {
@@ -129,8 +169,14 @@ fun ReaderScreen(
                         Box(Modifier.padding(top = 20.dp).width(48.dp).height(2.dp).background(fg))
                     }
                 }
-                itemsIndexed(article.blocks, key = { index, _ -> index }) { _, block ->
-                    Box(Modifier.widthIn(max = 680.dp).fillMaxWidth().padding(horizontal = 24.dp)) {
+                itemsIndexed(article.blocks, key = { index, _ -> index }) { index, block ->
+                    // The block being read aloud is shaded.
+                    val current = readAloud?.speaking == true && readAloud.block == index
+                    Box(
+                        Modifier.widthIn(max = 680.dp).fillMaxWidth()
+                            .then(if (current) Modifier.background(scheme.surfaceVariant) else Modifier)
+                            .padding(horizontal = 24.dp),
+                    ) {
                         Block(block, fontSize, family)
                     }
                 }
@@ -180,11 +226,14 @@ private fun ToolButton(
     description: String,
     enabled: Boolean,
     fontFamily: FontFamily = FontFamily.SansSerif,
+    active: Boolean = false,
+    width: androidx.compose.ui.unit.Dp = 44.dp,
     onClick: () -> Unit,
 ) {
     val fg = MaterialTheme.colorScheme.onBackground
     Box(
-        Modifier.padding(horizontal = 2.dp).size(width = 44.dp, height = 36.dp)
+        Modifier.padding(horizontal = 2.dp).size(width = width, height = 36.dp)
+            .then(if (active) Modifier.border(1.dp, fg, RectangleShape) else Modifier)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,

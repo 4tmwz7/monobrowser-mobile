@@ -17,6 +17,8 @@ data class ReaderArticle(
     val byline: String,
     val url: String,
     val blocks: List<ReaderBlock>,
+    /** The page's language (`<html lang>`, e.g. `pl` or `en-GB`); empty when unknown. */
+    val language: String = "",
 ) {
     val wordCount: Int get() = blocks.sumOf { b -> b.text.split(WHITESPACE).count { it.isNotEmpty() } }
 
@@ -47,6 +49,7 @@ object Reader {
         val site: String = "",
         val byline: String = "",
         val url: String = "",
+        val lang: String = "",
         val blocks: List<RawBlock> = emptyList(),
     )
 
@@ -100,6 +103,7 @@ object Reader {
             site = normalize(raw.site).replace('\n', ' '),
             byline = normalize(raw.byline).replace('\n', ' '),
             url = raw.url.trim(),
+            language = raw.lang.trim().takeIf { Regex("^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$").matches(it) }.orEmpty(),
             blocks = blocks,
         )
     }
@@ -168,6 +172,7 @@ object Reader {
             title: meta('meta[property="og:title"]') || doc.title || '',
             site: meta('meta[property="og:site_name"]') || location.hostname.replace(/^www\./, ''),
             byline: meta('meta[name="author"]'),
+            lang: doc.documentElement.lang || '',
             url: location.href,
             blocks: blocks
           });

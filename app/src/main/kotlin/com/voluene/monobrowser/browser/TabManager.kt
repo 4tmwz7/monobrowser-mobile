@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voluene.monobrowser.adblock.Adblock
 import com.voluene.monobrowser.util.UrlUtils
+import com.voluene.monobrowser.util.TranslateUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -1253,6 +1254,14 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
                 showMessage(str(R.string.reading_saved), str(R.string.message_view), onShowList)
             }
         }
+    }
+
+    /** Opens the page through Google Translate, into the phone's language. */
+    fun translatePage(tabId: Long) {
+        val tab = tab(tabId) ?: return
+        val url = errorUrls[tabId] ?: tab.url
+        if (!UrlUtils.isHttpUrl(url)) return
+        navigate(tabId, TranslateUrl.of(url, Locale.getDefault().language))
     }
 
     // --- Notes ---

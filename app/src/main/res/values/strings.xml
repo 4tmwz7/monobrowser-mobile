@@ -440,4 +440,10 @@
     <string name="start_unpin">Unpin from the start page</string>
     <string name="popup_blocked">Pop-up blocked</string>
     <string name="tab_history">Tab history</string>
+    <string name="reader_listen">Read aloud</string>
+    <string name="reader_pause">Pause reading</string>
+    <string name="reader_text_options">Text options</string>
+    <string name="reader_speed">Reading speed</string>
+    <string name="menu_translate">Translate page</string>
+    <string name="translate_page">Translate page</string>
 </resources>

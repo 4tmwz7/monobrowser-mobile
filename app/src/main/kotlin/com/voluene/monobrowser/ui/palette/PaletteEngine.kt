@@ -11,7 +11,7 @@ enum class PaletteActionId {
     /** [PaletteAction.arg] = workspace id. */
     SWITCH_WORKSPACE, NEW_WORKSPACE,
     OPEN_NOTES, NEW_NOTE, ADD_PAGE_TO_NOTE,
-    READER, DESKTOP_SITE, PRINT, TEXT_SIZE, READING_LIST, SAVE_FOR_LATER,
+    READER, DESKTOP_SITE, PRINT, TEXT_SIZE, READING_LIST, SAVE_FOR_LATER, TRANSLATE,
 }
 
 /** A command; [keywords] are extra search words (both languages, no diacritics needed), never shown. */
