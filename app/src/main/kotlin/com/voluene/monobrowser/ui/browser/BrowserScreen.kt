@@ -107,7 +107,11 @@ fun BrowserScreen(manager: TabManager) {
     LaunchedEffect(manager) { manager.updater.start(manager.settings) }
 
     // System back, lowest to highest priority: page history, find bar, full-screen overlays.
-    BackHandler(enabled = overlay == Overlay.None && find == null && tab.canGoBack) { manager.goBack(tab.id) }
+    // Page history, then (a link opened in a new tab) close it and return to the source tab; otherwise back leaves
+    // the app, with the system's predictive back-to-home animation.
+    BackHandler(enabled = overlay == Overlay.None && find == null && (tab.canGoBack || manager.backTarget(tab) != null)) {
+        manager.back(tab.id)
+    }
     BackHandler(enabled = overlay == Overlay.None && find != null) { manager.closeFind() }
     BackHandler(enabled = overlay != Overlay.None) { overlay = Overlay.None }
     BackHandler(enabled = linkMenu != null) { manager.dismissLinkMenu() }
@@ -332,6 +336,7 @@ fun BrowserScreen(manager: TabManager) {
                         onReloadOrStop = { if (tab.isLoading) manager.stop(tab.id) else manager.reload(tab.id) },
                         onMenu = { overlay = Overlay.Menu },
                         onTabs = { overlay = Overlay.Tabs },
+                        onNewTab = { manager.openNewTab() },
                         onSwipeTab = manager::switchRelative,
                     )
                 }

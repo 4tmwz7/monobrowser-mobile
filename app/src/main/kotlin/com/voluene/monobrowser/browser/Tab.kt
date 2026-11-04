@@ -20,6 +20,8 @@ data class Tab(
     val workspaceId: String = WorkspaceOps.MAIN_ID,
     /** "Desktop site": desktop user agent and an overview-sized viewport. */
     val desktopMode: Boolean = false,
+    /** The tab a link was opened from: back on a tab without history closes it and returns there. */
+    val openerId: Long? = null,
 ) {
     val isLoading: Boolean get() = progress in 0..99
 }

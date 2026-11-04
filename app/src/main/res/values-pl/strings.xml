@@ -398,4 +398,7 @@
     <string name="tabs_filter_hint">Szukaj kart</string>
     <string name="tab_desktop_badge">KOMPUTER</string>
     <string name="download_too_large">Plik jest za duży, aby go zapisać (ponad 25 MB)</string>
+    <string name="shortcut_new_tab">Nowa karta</string>
+    <string name="shortcut_new_private_tab">Karta prywatna</string>
+    <string name="process_text_label">Szukaj w MonoBrowser</string>
 </resources>

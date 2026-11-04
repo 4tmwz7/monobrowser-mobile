@@ -206,7 +206,13 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
      * Opens a tab in [workspaceId] (default: the current one). With [background] the tab is added without being
      * shown: a normal one stays asleep and loads [url] when first shown; a private one (which never sleeps) loads now.
      */
-    fun newTab(isPrivate: Boolean = false, url: String? = null, background: Boolean = false, workspaceId: String = _currentWorkspaceId.value): Long {
+    fun newTab(
+        isPrivate: Boolean = false,
+        url: String? = null,
+        background: Boolean = false,
+        workspaceId: String = _currentWorkspaceId.value,
+        openerId: Long? = null,
+    ): Long {
         val workspace = workspaceId.takeIf { id -> _workspaces.value.any { it.id == id } } ?: WorkspaceOps.MAIN_ID
         val target = url ?: settingsFile.value.newTabUrl
         if (background) {
@@ -217,7 +223,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
             schedulePersist()
             return tab.id
         }
-        val tab = Tab(id = nextId++, isPrivate = isPrivate, workspaceId = workspace)
+        val tab = Tab(id = nextId++, isPrivate = isPrivate, workspaceId = workspace, openerId = openerId)
         _tabs.update { it + tab }
         activate(tab.id)
         if (target != null) navigate(tab.id, target)
@@ -361,12 +367,26 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         ensureLive(id, restore = false)?.loadUrl(url)
     }
 
-    /** URL from an external VIEW intent: open in a new tab. */
-    fun openExternalUrl(url: String) {
+    /** Shared or selected text from another app: a URL is opened, anything else is searched, in a new tab. */
+    fun openExternalInput(input: String) {
+        val url = UrlUtils.resolveInput(input, settingsFile.value.searchTemplate) ?: return
         if (UrlUtils.isHttpUrl(url)) newTab(url = url)
     }
 
     fun goBack(id: Long) { webViews[id]?.goBack() }
+
+    /** The tab back returns to when [tab] has no history of its own (its opener, if still open), else null. */
+    fun backTarget(tab: Tab): Long? =
+        tab.openerId?.takeIf { opener -> !tab.canGoBack && opener != tab.id && _tabs.value.any { it.id == opener } }
+
+    /** System back: page history first, then "close this link tab and return to the tab it came from". */
+    fun back(id: Long) {
+        val tab = _tabs.value.firstOrNull { it.id == id } ?: return
+        if (tab.canGoBack) return goBack(id)
+        val opener = backTarget(tab) ?: return
+        closeTab(id)
+        switchTo(opener)
+    }
     fun goForward(id: Long) { webViews[id]?.goForward() }
     fun stop(id: Long) { webViews[id]?.stopLoading() }
 
@@ -774,7 +794,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     private fun openLink(url: String, sourceTabId: Long, background: Boolean, forcePrivate: Boolean) {
         val source = tab(sourceTabId)
         val isPrivate = LinkActions.opensPrivate(source?.isPrivate == true, forcePrivate)
-        newTab(isPrivate = isPrivate, url = url, background = background, workspaceId = source?.workspaceId ?: _currentWorkspaceId.value)
+        newTab(
+            isPrivate = isPrivate, url = url, background = background, workspaceId = source?.workspaceId ?: _currentWorkspaceId.value,
+            openerId = sourceTabId.takeIf { !background && source != null && _tabs.value.any { it.id == sourceTabId } },
+        )
         if (background) toast(R.string.link_opened_background)
     }
 
@@ -817,7 +840,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     /** "Open in tab": the glance's WebView becomes a real tab without reloading. */
     fun expandGlance() {
+        val source = _activeTabId.value
         val glance = adoptGlance() ?: return
+        update(glance.id) { it.copy(openerId = source) }
         activate(glance.id)
     }
 

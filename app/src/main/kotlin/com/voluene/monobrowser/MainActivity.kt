@@ -11,6 +11,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import com.voluene.monobrowser.browser.ActivityHost
+import com.voluene.monobrowser.browser.IncomingIntent
+import com.voluene.monobrowser.browser.IncomingRequest
 import com.voluene.monobrowser.browser.TabManager
 import com.voluene.monobrowser.ui.browser.BrowserScreen
 import com.voluene.monobrowser.settings.AppLanguage
@@ -117,7 +119,18 @@ class MainActivity : ComponentActivity(), ActivityHost {
     }
 
     private fun handleIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_VIEW) intent.dataString?.let(tabManager::openExternalUrl)
+        intent ?: return
+        val text = when (intent.action) {
+            Intent.ACTION_SEND -> intent.getCharSequenceExtra(Intent.EXTRA_TEXT)
+            Intent.ACTION_PROCESS_TEXT -> intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
+            Intent.ACTION_WEB_SEARCH -> intent.getStringExtra(android.app.SearchManager.QUERY)
+            else -> null
+        }
+        when (val request = IncomingIntent.parse(intent.action, intent.dataString, text)) {
+            is IncomingRequest.Open -> tabManager.openExternalInput(request.input)
+            is IncomingRequest.NewTab -> tabManager.openNewTab(isPrivate = request.isPrivate)
+            IncomingRequest.None -> Unit
+        }
     }
 
     override fun pickFiles(params: WebChromeClient.FileChooserParams, onResult: (Array<Uri>?) -> Unit) {

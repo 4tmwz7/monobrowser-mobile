@@ -49,6 +49,29 @@
                 <data android:scheme="http" />
                 <data android:scheme="https" />
             </intent-filter>
+            <!-- "Share" a link or text to the browser: links open, other text is searched. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- "Search in MonoBrowser" in the text selection menu of other apps. -->
+            <intent-filter android:label="@string/process_text_label">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.WEB_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Launcher shortcuts (long-press the app icon). -->
+            <intent-filter>
+                <action android:name="com.voluene.monobrowser.action.NEW_TAB" />
+                <action android:name="com.voluene.monobrowser.action.NEW_PRIVATE_TAB" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
 
         <receiver android:name=".update.InstallReceiver" android:exported="false" />

@@ -5,7 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -101,6 +103,7 @@ fun AddressBar(
     onReloadOrStop: () -> Unit,
     onMenu: () -> Unit,
     onTabs: () -> Unit,
+    onNewTab: () -> Unit,
     onSwipeTab: (Int) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -108,7 +111,10 @@ fun AddressBar(
     val fg = if (tab.isPrivate) scheme.background else scheme.onBackground
     val shown = if (UrlUtils.isAboutBlankUrl(tab.url)) "" else UrlUtils.displayUrl(tab.url)
     val swipe by rememberUpdatedState(onSwipeTab)
+    val openTabs by rememberUpdatedState(onTabs)
+    val haptics = LocalHapticFeedback.current
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    val flingThreshold = with(LocalDensity.current) { 40.dp.toPx() }
 
     val progress: @Composable () -> Unit = {
         // Thin loading progress bar.
@@ -122,15 +128,20 @@ fun AddressBar(
     val insets = if (toolbarTop) Modifier else Modifier.navigationBarsPadding().imePadding()
     Column(
         Modifier.fillMaxWidth().background(bg).then(insets)
-            .pointerInput(swipeThreshold) {
-                var total = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { total = 0f },
+            .pointerInput(swipeThreshold, toolbarTop) {
+                var dx = 0f
+                var dy = 0f
+                detectDragGestures(
+                    onDragStart = { dx = 0f; dy = 0f },
                     onDragEnd = {
-                        // Swipe left = next tab, swipe right = previous tab.
-                        if (total <= -swipeThreshold) swipe(1) else if (total >= swipeThreshold) swipe(-1)
+                        when (BarGesture.classify(dx, dy, swipeThreshold, flingThreshold, toolbarTop)) {
+                            BarGesture.NEXT_TAB -> { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); swipe(1) }
+                            BarGesture.PREVIOUS_TAB -> { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); swipe(-1) }
+                            BarGesture.OPEN_TABS -> { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); openTabs() }
+                            BarGesture.NONE -> Unit
+                        }
                     },
-                    onHorizontalDrag = { _, delta -> total += delta },
+                    onDrag = { change, delta -> change.consume(); dx += delta.x; dy += delta.y },
                 )
             },
     ) {
@@ -173,7 +184,12 @@ fun AddressBar(
             val tabsLabel = stringResource(R.string.action_tabs, tabCount)
             Box(
                 Modifier.padding(horizontal = 6.dp).size(32.dp).border(1.dp, fg, RectangleShape)
-                    .clickable(onClickLabel = tabsLabel, onClick = onTabs),
+                    .combinedClickable(
+                        onClickLabel = tabsLabel,
+                        onLongClickLabel = stringResource(R.string.tab_new),
+                        onLongClick = onNewTab,
+                        onClick = onTabs,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(tabCount.toString(), color = fg, fontSize = 14.sp)
@@ -187,5 +203,27 @@ fun AddressBar(
 private fun BarButton(icon: ImageVector, label: Int, enabled: Boolean, tint: Color, onClick: () -> Unit) {
     IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(38.dp)) {
         Icon(icon, contentDescription = stringResource(label), tint = tint.copy(alpha = if (enabled) 1f else 0.35f))
+    }
+}
+
+/** What a drag on the address bar means. Pure, unit-tested. */
+enum class BarGesture {
+    NEXT_TAB, PREVIOUS_TAB, OPEN_TABS, NONE;
+
+    companion object {
+        /**
+         * Mostly sideways: left = next tab, right = previous tab (past [sideways] px). Mostly vertical, away from the
+         * screen edge the bar sits on (up for a bottom bar, down for a top bar, past [vertical] px): the tab list.
+         */
+        fun classify(dx: Float, dy: Float, sideways: Float, vertical: Float, toolbarTop: Boolean): BarGesture = when {
+            kotlin.math.abs(dx) >= kotlin.math.abs(dy) -> when {
+                dx <= -sideways -> NEXT_TAB
+                dx >= sideways -> PREVIOUS_TAB
+                else -> NONE
+            }
+            !toolbarTop && dy <= -vertical -> OPEN_TABS
+            toolbarTop && dy >= vertical -> OPEN_TABS
+            else -> NONE
+        }
     }
 }

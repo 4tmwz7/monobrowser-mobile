@@ -398,4 +398,7 @@
     <string name="tabs_filter_hint">Search tabs</string>
     <string name="tab_desktop_badge">DESKTOP</string>
     <string name="download_too_large">The file is too large to save (over 25 MB)</string>
+    <string name="shortcut_new_tab">New tab</string>
+    <string name="shortcut_new_private_tab">Private tab</string>
+    <string name="process_text_label">Search in MonoBrowser</string>
 </resources>
