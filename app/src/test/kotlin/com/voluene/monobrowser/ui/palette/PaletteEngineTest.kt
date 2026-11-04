@@ -119,4 +119,17 @@ class PaletteEngineTest {
         assertEquals("lodz zolc", PaletteEngine.fold("Łódź Żółć"))
         assertEquals("strasse", PaletteEngine.fold("Straße"))
     }
+
+    @Test fun suggestionsFollowTheSearchRowOnlyForSearches() {
+        val r = PaletteEngine.search("lodz", emptyList(), emptyList(), emptyList(), emptyList(), listOf("lodz pogoda", "LODZ", "lodz kaliska", "a", "b", "c"))
+        assertEquals(PaletteResult.Go("lodz", true), r[0])
+        assertEquals(
+            listOf("lodz pogoda", "lodz kaliska", "a", "b"),
+            r.filterIsInstance<PaletteResult.Suggestion>().map { it.text },
+        )
+        assertEquals(PaletteSection.GO, r[1].section())
+        // A URL is opened, not searched: no suggestions.
+        val url = PaletteEngine.search("example.com", emptyList(), emptyList(), emptyList(), emptyList(), listOf("example.com login"))
+        assertTrue(url.none { it is PaletteResult.Suggestion })
+    }
 }

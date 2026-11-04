@@ -65,6 +65,7 @@ import com.voluene.monobrowser.data.TopSite
 import com.voluene.monobrowser.reader.ReaderArticle
 import com.voluene.monobrowser.ui.reader.ReaderScreen
 import com.voluene.monobrowser.ui.start.StartPage
+import com.voluene.monobrowser.search.SearchSuggestions
 import com.voluene.monobrowser.ui.common.BackStyle
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -331,6 +332,7 @@ fun BrowserScreen(manager: TabManager) {
         overlay = Overlay.None
         when (result) {
             is PaletteResult.Go -> manager.navigate(tab.id, result.input)
+            is PaletteResult.Suggestion -> manager.navigate(tab.id, result.text)
             is PaletteResult.OpenTab -> manager.switchTo(result.tab.id)
             is PaletteResult.Bookmark -> manager.navigate(tab.id, result.link.url)
             is PaletteResult.History -> manager.navigate(tab.id, result.link.url)
@@ -507,6 +509,9 @@ fun BrowserScreen(manager: TabManager) {
                     bookmarks = bookmarks.bookmarks.asReversed().map { PaletteLink(it.title, it.url) },
                     actions = paletteActions,
                     historyLookup = { q -> manager.paletteHistory(q).map { PaletteLink(it.title, it.url) } },
+                    suggestionLookup = if (settings.searchSuggestions && !tab.isPrivate) {
+                        { q -> withContext(Dispatchers.IO) { SearchSuggestions.fetch(settings.searchEngine, q, java.util.Locale.getDefault().language) } }
+                    } else null,
                     onResult = ::runPalette,
                     onDismiss = { overlay = Overlay.None },
                 )

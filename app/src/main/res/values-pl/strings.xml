@@ -401,4 +401,7 @@
     <string name="shortcut_new_tab">Nowa karta</string>
     <string name="shortcut_new_private_tab">Karta prywatna</string>
     <string name="process_text_label">Szukaj w MonoBrowser</string>
+    <string name="settings_suggestions">Podpowiedzi wyszukiwania</string>
+    <string name="settings_suggestions_hint">To, co wpisujesz w pasku adresu, trafia do wyszukiwarki. Nigdy w kartach prywatnych.</string>
+    <string name="palette_refine">Wstaw „%1$s” do paska adresu</string>
 </resources>

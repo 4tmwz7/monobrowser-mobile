@@ -66,6 +66,8 @@ data class AppSettings(
     /** Reader view text size in sp. */
     val readerFontSize: Int = DEFAULT_READER_FONT_SIZE,
     val readerSerif: Boolean = true,
+    /** Ask the search engine for suggestions while typing (never in private tabs). */
+    val searchSuggestions: Boolean = true,
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String

@@ -73,6 +73,8 @@ fun PaletteScreen(
     bookmarks: List<PaletteLink>,
     actions: List<PaletteAction>,
     historyLookup: suspend (String) -> List<PaletteLink>,
+    /** Search suggestions of the engine; null = off (setting, private tab, custom engine). */
+    suggestionLookup: (suspend (String) -> List<String>)?,
     onResult: (PaletteResult) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -89,7 +91,18 @@ fun PaletteScreen(
         history = withContext(Dispatchers.IO) { historyLookup(query.trim()) }
     }
 
-    val results = remember(query, history, tabs, bookmarks, actions) { PaletteEngine.search(query, tabs, bookmarks, history, actions) }
+    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(query) {
+        val lookup = suggestionLookup
+        if (lookup == null || query.isBlank() || !PaletteEngine.isSearchInput(query)) { suggestions = emptyList(); return@LaunchedEffect }
+        delay(150) // debounce: only ask once typing pauses
+        suggestions = lookup(query.trim())
+    }
+    val results = remember(query, history, tabs, bookmarks, actions, suggestions) {
+        PaletteEngine.search(query, tabs, bookmarks, history, actions, suggestions)
+    }
+    // "Refine": the suggestion goes into the field so it can be extended.
+    val refine: (String) -> Unit = { text -> field = TextFieldValue("$text ", TextRange(text.length + 1)) }
     val rows = remember(results, toolbarTop) { buildRows(results, headersAfterItems = !toolbarTop) }
 
     val input: @Composable () -> Unit = {
@@ -131,7 +144,7 @@ fun PaletteScreen(
             }) { row ->
                 when (row) {
                     is PaletteRow.Header -> SectionLabel(row.section)
-                    is PaletteRow.Item -> ResultRow(row.result, first = row.index == 0) { onResult(row.result) }
+                    is PaletteRow.Item -> ResultRow(row.result, first = row.index == 0, onRefine = refine) { onResult(row.result) }
                 }
             }
         }
@@ -185,11 +198,12 @@ private fun SectionLabel(section: PaletteSection) {
 }
 
 @Composable
-private fun ResultRow(result: PaletteResult, first: Boolean, onClick: () -> Unit) {
+private fun ResultRow(result: PaletteResult, first: Boolean, onRefine: (String) -> Unit, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val (title, subtitle) = when (result) {
         is PaletteResult.Go ->
             stringResource(if (result.isSearch) R.string.palette_search_for else R.string.palette_go_to, result.input) to ""
+        is PaletteResult.Suggestion -> result.text to ""
         is PaletteResult.OpenTab -> result.tab.title.ifBlank { UrlUtils.shortUrlLabel(result.tab.url).ifBlank { stringResource(R.string.tab_untitled) } } to
             listOfNotNull(
                 result.tab.workspace.takeIf { it.isNotBlank() },
@@ -213,6 +227,13 @@ private fun ResultRow(result: PaletteResult, first: Boolean, onClick: () -> Unit
             if (subtitle.isNotEmpty()) {
                 Text(subtitle, color = scheme.onBackground.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+        }
+        if (result is PaletteResult.Suggestion) {
+            val label = stringResource(R.string.palette_refine, result.text)
+            Box(
+                Modifier.size(36.dp).clickable(onClickLabel = label) { onRefine(result.text) },
+                contentAlignment = Alignment.Center,
+            ) { Text("\u2196", color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 18.sp) }
         }
     }
 }

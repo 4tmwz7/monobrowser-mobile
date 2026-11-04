@@ -31,6 +31,8 @@ data class PaletteLink(val title: String, val url: String)
 sealed interface PaletteResult {
     /** First row: load the typed text as a URL or search it. */
     data class Go(val input: String, val isSearch: Boolean) : PaletteResult
+    /** A search suggestion of the engine (right under the Go row). */
+    data class Suggestion(val text: String) : PaletteResult
     data class OpenTab(val tab: PaletteTab) : PaletteResult
     data class Bookmark(val link: PaletteLink) : PaletteResult
     data class History(val link: PaletteLink) : PaletteResult
@@ -41,7 +43,7 @@ sealed interface PaletteResult {
 enum class PaletteSection { GO, TABS, BOOKMARKS, HISTORY, ACTIONS }
 
 fun PaletteResult.section(): PaletteSection = when (this) {
-    is PaletteResult.Go -> PaletteSection.GO
+    is PaletteResult.Go, is PaletteResult.Suggestion -> PaletteSection.GO
     is PaletteResult.OpenTab -> PaletteSection.TABS
     is PaletteResult.Bookmark -> PaletteSection.BOOKMARKS
     is PaletteResult.History -> PaletteSection.HISTORY
@@ -59,6 +61,7 @@ object PaletteEngine {
     const val MAX_BOOKMARKS = 5
     const val MAX_HISTORY = 5
     const val MAX_ACTIONS = 8
+    const val MAX_SUGGESTIONS = 4
 
     /** Lower case without diacritics; letters that do not decompose (Polish ł, ø, đ, ß ...) are mapped by hand. */
     fun fold(value: String): String =
@@ -132,11 +135,20 @@ object PaletteEngine {
         bookmarks: List<PaletteLink>,
         history: List<PaletteLink>,
         actions: List<PaletteAction>,
+        suggestions: List<String> = emptyList(),
     ): List<PaletteResult> {
         val trimmed = query.trim()
         val words = words(query)
         val out = ArrayList<PaletteResult>()
-        if (trimmed.isNotEmpty()) out.add(PaletteResult.Go(trimmed, isSearchInput(trimmed)))
+        if (trimmed.isNotEmpty()) {
+            val isSearch = isSearchInput(trimmed)
+            out.add(PaletteResult.Go(trimmed, isSearch))
+            // Engine suggestions only make sense for text that is going to be searched.
+            if (isSearch) {
+                suggestions.filter { !it.equals(trimmed, ignoreCase = true) }.distinctBy { it.lowercase() }
+                    .take(MAX_SUGGESTIONS).forEach { out.add(PaletteResult.Suggestion(it)) }
+            }
+        }
 
         val tabHits = filterLinks(tabs, words, { it.title }, { it.url }, MAX_TABS, { it.workspace })
         tabHits.forEach { out.add(PaletteResult.OpenTab(it)) }

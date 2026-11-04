@@ -401,4 +401,7 @@
     <string name="shortcut_new_tab">New tab</string>
     <string name="shortcut_new_private_tab">Private tab</string>
     <string name="process_text_label">Search in MonoBrowser</string>
+    <string name="settings_suggestions">Search suggestions</string>
+    <string name="settings_suggestions_hint">What you type in the address bar is sent to the search engine. Never in private tabs.</string>
+    <string name="palette_refine">Put \"%1$s\" in the address bar</string>
 </resources>

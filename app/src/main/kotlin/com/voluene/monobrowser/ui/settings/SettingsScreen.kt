@@ -165,6 +165,9 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             if (settings.searchEngine == SearchEngine.CUSTOM) {
                 SettingRow(stringResource(R.string.settings_custom_url), settings.customSearchUrl, onClick = { dialog = "customUrl" })
             }
+            if (settings.searchEngine != SearchEngine.CUSTOM) {
+                SwitchRow(stringResource(R.string.settings_suggestions), stringResource(R.string.settings_suggestions_hint), settings.searchSuggestions) { v -> update { it.copy(searchSuggestions = v) } }
+            }
             SettingRow(stringResource(R.string.settings_startup), startupNames[settings.startupMode], onClick = { dialog = "startup" })
             SettingRow(stringResource(R.string.settings_newtab_page), newTabNames[settings.newTabPage], onClick = { dialog = "newtab" })
             if (settings.newTabPage == NewTabPage.HOMEPAGE) {
