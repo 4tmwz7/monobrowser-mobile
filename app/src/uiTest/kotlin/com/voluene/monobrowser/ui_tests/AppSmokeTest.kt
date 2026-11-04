@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextClearance
@@ -64,6 +65,12 @@ class AppSmokeTest {
         fun open(label: String, shot: String) {
             compose.onNodeWithContentDescription("Menu").performClick()
             compose.waitForIdle(); compose.mainClock.advanceTimeBy(600)
+            // Tiles past the first two rows are behind "More".
+            if (compose.onAllNodesWithText(label).fetchSemanticsNodes().isEmpty()) {
+                compose.onNodeWithText("More").performClick()
+                compose.waitForIdle(); compose.mainClock.advanceTimeBy(600)
+                if (shot == "tour_downloads") save("menu_more")
+            }
             compose.onNodeWithText(label).performClick()
             save(shot)
             compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }

@@ -509,4 +509,6 @@
     <string name="pip_unavailable">Floating video windows are not available on this device</string>
     <string name="settings_pip">Video in a floating window</string>
     <string name="settings_pip_hint">Leaving the app while a video plays in the current tab keeps it playing in a small window. Videos also keep playing in the background with the screen off.</string>
+    <string name="menu_more">More</string>
+    <string name="menu_less">Less</string>
 </resources>

@@ -269,7 +269,8 @@ fun BrowserScreen(manager: TabManager) {
     }
 
     // Built only while the menu / palette is open (not on every progress tick of the page).
-    val menuTiles: @Composable () -> List<MenuTile> = { listOf(
+    // The first seven are the two rows always shown (with "More"); the rest unfolds below.
+    val menuTiles: @Composable () -> List<MenuTile> = { listOfNotNull(
         MenuTile(R.string.tab_new, Icons.Filled.Add) { manager.openNewTab() },
         MenuTile(R.string.menu_new_private_short, Icons.Filled.Lock) { manager.openNewTab(isPrivate = true) },
         MenuTile(R.string.menu_bookmarks, MenuIcons.Bookmark) { overlay = Overlay.Bookmarks },
@@ -278,22 +279,26 @@ fun BrowserScreen(manager: TabManager) {
             if (bookmarked) Icons.Filled.Star else MenuIcons.StarOutline, enabled = isWeb && !tab.isPrivate, active = bookmarked,
         ) { manager.toggleBookmark(tab.id) },
         MenuTile(R.string.menu_history, Icons.Filled.DateRange) { overlay = Overlay.History },
-        MenuTile(R.string.menu_downloads, MenuIcons.Download) { overlay = Overlay.Downloads },
-        MenuTile(R.string.menu_notes, Icons.Filled.Edit) { openNotes(newNote = false) },
-        MenuTile(R.string.menu_note_add_short, Icons.Filled.List, enabled = isWeb && !tab.isPrivate) { manager.addPageToNote(tab.id) },
-        MenuTile(R.string.menu_find, Icons.Filled.Search, enabled = isWeb) { manager.openFind() },
-        MenuTile(R.string.menu_reader, MenuIcons.Article, enabled = isWeb && !tab.isLoading) { openReader() },
-        MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
-        MenuTile(R.string.menu_text_size, MenuIcons.TextSize) { textSizeOpen = true },
-        MenuTile(R.string.menu_reopen_short, MenuIcons.Restore, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
-        MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() },
-        // While a video plays here, the floating window takes the print tile's place (the grid stays 4 x 4).
+        // While a video plays here, its floating window is one of the main tiles (share moves down).
         if (manager.pictureInPictureVideo() != null) {
             MenuTile(R.string.menu_pip, MenuIcons.PictureInPicture) { if (!manager.enterPictureInPicture()) toast(R.string.pip_unavailable) }
         } else {
-            MenuTile(R.string.menu_print, MenuIcons.Print, enabled = isWeb && !tab.isLoading) { printPage() }
+            MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() }
         },
         MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
+        // --- More ---
+        MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() }.takeIf { manager.pictureInPictureVideo() != null },
+        MenuTile(R.string.menu_find, Icons.Filled.Search, enabled = isWeb) { manager.openFind() },
+        MenuTile(R.string.menu_downloads, MenuIcons.Download) { overlay = Overlay.Downloads },
+        MenuTile(R.string.menu_reader, MenuIcons.Article, enabled = isWeb && !tab.isLoading) { openReader() },
+        MenuTile(R.string.menu_reopen_short, MenuIcons.Restore, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
+        MenuTile(R.string.menu_notes, Icons.Filled.Edit) { openNotes(newNote = false) },
+        // Watching a video, "share" moved here and "add to note" makes room (the grid stays 2 + 2 rows).
+        MenuTile(R.string.menu_note_add_short, Icons.Filled.List, enabled = isWeb && !tab.isPrivate) { manager.addPageToNote(tab.id) }
+            .takeIf { manager.pictureInPictureVideo() == null },
+        MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
+        MenuTile(R.string.menu_text_size, MenuIcons.TextSize) { textSizeOpen = true },
+        // Print / PDF: "/drukuj" or "/print" in the address bar.
     ) }
     val menuInfo: @Composable () -> MenuInfo? = { when {
         !isWeb -> null

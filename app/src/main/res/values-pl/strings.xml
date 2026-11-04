@@ -509,4 +509,6 @@
     <string name="pip_unavailable">Pływające okienka wideo nie są dostępne na tym urządzeniu</string>
     <string name="settings_pip">Wideo w pływającym okienku</string>
     <string name="settings_pip_hint">Wyjście z aplikacji podczas odtwarzania wideo w bieżącej karcie przenosi je do małego okienka. Wideo gra też w tle przy wyłączonym ekranie.</string>
+    <string name="menu_more">Więcej</string>
+    <string name="menu_less">Mniej</string>
 </resources>

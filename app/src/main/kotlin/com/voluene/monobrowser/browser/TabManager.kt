@@ -877,8 +877,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
 
     // --- Background work: pause what nobody sees, unless it is playing sound or video ---
 
+    // Also media the page never put in the document (new Audio()), tracked by WebMediaHub.SCRIPT.
     private val mediaPlayingScript =
-        "(function(){var m=document.querySelectorAll('video,audio');for(var i=0;i<m.length;i++){if(!m[i].paused&&!m[i].ended&&!m[i].muted)return true}return false})()"
+        "(function(){if(window.__monoMediaPlaying)return window.__monoMediaPlaying();var m=document.querySelectorAll('video,audio');for(var i=0;i<m.length;i++){if(!m[i].paused&&!m[i].ended&&!m[i].muted)return true}return false})()"
 
     /** [onResult] is true when the page plays audible media (a tab playing music must keep playing). */
     private fun isPlayingMedia(webView: WebView, onResult: (Boolean) -> Unit) {
@@ -905,6 +906,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         if (visible == appVisible) return
         appVisible = visible
         val active = webViews[_activeTabId.value]
+        guardPlayback(!visible || _pictureInPicture.value)
         if (visible) {
             webViews.values.firstOrNull()?.resumeTimers()
             active?.onResume()
@@ -1649,10 +1651,16 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     fun onPictureInPicture(active: Boolean) {
         if (_pictureInPicture.value == active) return
         _pictureInPicture.value = active
+        guardPlayback(active || !appVisible)
         val tabId = webMedia.state.value?.tabId ?: _activeTabId.value
         // A page element already in full screen is shown as it is.
         if (active && _fullScreen.value != null) return
         webViews[tabId]?.let { runCatching { it.evaluateJavascript("window.__monoPip && window.__monoPip($active)", null) } }
+    }
+
+    /** Pages may not pause their own playback while nobody can see them (background, floating window). */
+    private fun guardPlayback(on: Boolean) {
+        webViews.values.forEach { runCatching { it.evaluateJavascript("window.__monoGuard && window.__monoGuard($on)", null) } }
     }
 
     /** The floating window was closed (swiped away): like closing a video player, playback stops. */

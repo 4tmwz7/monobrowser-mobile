@@ -117,6 +117,7 @@ class WebMediaHub(private val context: android.content.Context) {
                 });
               } catch (e) {}
               var handlers = {}, last = null, ticker = 0, pending = 0;
+              var TYPES = ['play', 'playing', 'pause', 'ended', 'emptied', 'seeked', 'ratechange', 'durationchange', 'loadedmetadata', 'resize'];
               var ms = navigator.mediaSession;
               if (ms && ms.setActionHandler) {
                 var original = ms.setActionHandler.bind(ms);
@@ -128,13 +129,15 @@ class WebMediaHub(private val context: android.content.Context) {
               // Metadata set after playback started (the usual case) is reported right away.
               try {
                 var proto = window.MediaSession && MediaSession.prototype;
-                var desc = proto && Object.getOwnPropertyDescriptor(proto, 'metadata');
-                if (desc && desc.set) {
-                  Object.defineProperty(proto, 'metadata', {
-                    configurable: true, enumerable: desc.enumerable,
-                    get: desc.get, set: function (v) { desc.set.call(this, v); soon(); }
-                  });
-                }
+                ['metadata', 'playbackState'].forEach(function (name) {
+                  var d = proto && Object.getOwnPropertyDescriptor(proto, name);
+                  if (d && d.set) {
+                    Object.defineProperty(proto, name, {
+                      configurable: true, enumerable: d.enumerable,
+                      get: d.get, set: function (v) { d.set.call(this, v); soon(); }
+                    });
+                  }
+                });
               } catch (e) {}
               function youtubeId() {
                 try {
@@ -181,12 +184,58 @@ class WebMediaHub(private val context: android.content.Context) {
                   return d && d.video_id ? d : null;
                 } catch (e) { return null; }
               }
+              // Players that never put their element in the page (new Audio(): SoundCloud, many music sites).
+              var detached = [];
+              function track(el) {
+                if (!el || el.__monoTracked) return;
+                el.__monoTracked = true;
+                TYPES.forEach(function (type) { el.addEventListener(type, function () { if (type === 'play' || type === 'playing') last = el; soon(); }); });
+                if (!el.isConnected) {
+                  detached.push(el);
+                  if (detached.length > 32) detached.shift();
+                }
+              }
+              function allMedia() {
+                var list = Array.prototype.slice.call(document.querySelectorAll('video,audio'));
+                for (var i = 0; i < detached.length; i++) if (list.indexOf(detached[i]) < 0) list.push(detached[i]);
+                if (last && list.indexOf(last) < 0) list.push(last);
+                return list;
+              }
+              try {
+                var origPlay = HTMLMediaElement.prototype.play;
+                HTMLMediaElement.prototype.play = function () {
+                  track(this);
+                  last = this;
+                  var result = origPlay.apply(this, arguments);
+                  soon();
+                  return result;
+                };
+              } catch (e) {}
+              // While the app is in the background or a floating window, the page may not pause by itself (YouTube
+              // pauses when it thinks it is not watched); pauses asked for by the user (notification, window
+              // button, lock screen) go through __monoMediaPause and are let through.
+              var guard = false, allowPause = 0;
+              try {
+                var origPause = HTMLMediaElement.prototype.pause;
+                HTMLMediaElement.prototype.pause = function () {
+                  if (guard && Date.now() > allowPause && !this.paused && !this.muted) return;
+                  return origPause.apply(this, arguments);
+                };
+              } catch (e) {}
+              window.__monoGuard = function (on) { guard = !!on; };
+              window.__monoMediaPlaying = function () {
+                var media = allMedia();
+                for (var i = 0; i < media.length; i++) if (!media[i].paused && !media[i].ended && !media[i].muted) return true;
+                return false;
+              };
               function report() {
                 pending = 0;
-                var media = document.querySelectorAll('video,audio'), playing = false;
+                var media = allMedia(), playing = false;
                 for (var i = 0; i < media.length; i++) {
                   if (!media[i].paused && !media[i].ended) { playing = true; last = media[i]; break; }
                 }
+                // Players without a media element (Web Audio) count when they declare it through the Media Session.
+                if (!playing && ms && ms.metadata && ms.playbackState === 'playing') playing = true;
                 var md = ms && ms.metadata, yt = youtubeData();
                 var title = (md && md.title) || (yt && yt.title) || pageTitle();
                 var artist = (md && md.artist) || (yt && yt.author) || site();
@@ -201,7 +250,7 @@ class WebMediaHub(private val context: android.content.Context) {
                 if (!playing && ticker) { clearInterval(ticker); ticker = 0; }
               }
               function soon() { if (!pending) pending = setTimeout(report, 150); }
-              ['play', 'playing', 'pause', 'ended', 'emptied', 'seeked', 'ratechange', 'durationchange', 'loadedmetadata', 'resize'].forEach(function (type) {
+              TYPES.forEach(function (type) {
                 document.addEventListener(type, function (e) {
                   var t = e.target;
                   if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) {
@@ -220,8 +269,9 @@ class WebMediaHub(private val context: android.content.Context) {
                 if (last) last.play();
               };
               window.__monoMediaPause = function () {
+                allowPause = Date.now() + 1500;
                 if (handlers.pause) { try { handlers.pause({ action: 'pause' }); } catch (e) {} }
-                var media = document.querySelectorAll('video,audio');
+                var media = allMedia();
                 for (var i = 0; i < media.length; i++) media[i].pause();
               };
               window.__monoMediaSeek = function (ms) {
@@ -232,19 +282,34 @@ class WebMediaHub(private val context: android.content.Context) {
                 var h = handlers[forward ? 'nexttrack' : 'previoustrack'];
                 if (h) { try { h({ action: forward ? 'nexttrack' : 'previoustrack' }); } catch (e) {} }
               };
-              // Picture in picture: the video covers the page (the window shows the page, not just the video).
+              // Picture in picture: only the playing video, covering the whole window. Everything else is hidden
+              // (visibility, so the page keeps its state), and the video's ancestors lose transforms and filters:
+              // those would make "position: fixed" relative to them (YouTube's mini player) instead of the window.
               window.__monoPip = function (on) {
                 var style = document.getElementById('__mono_pip');
-                if (!on) { if (style) style.remove(); if (last) last.removeAttribute('data-mono-pip'); return; }
-                if (!last || last.tagName !== 'VIDEO') return;
-                last.setAttribute('data-mono-pip', '');
+                var marked = document.querySelectorAll('[data-mono-pip],[data-mono-pip-up]');
+                for (var i = 0; i < marked.length; i++) { marked[i].removeAttribute('data-mono-pip'); marked[i].removeAttribute('data-mono-pip-up'); }
+                if (!on) { if (style) style.remove(); return; }
+                var video = null, media = allMedia();
+                for (var k = 0; k < media.length; k++) {
+                  var m = media[k];
+                  if (m.tagName === 'VIDEO' && m.isConnected && !m.paused && !m.ended) { video = m; break; }
+                }
+                if (!video && last && last.tagName === 'VIDEO' && last.isConnected) video = last;
+                if (!video) return;
+                video.setAttribute('data-mono-pip', '');
+                for (var el = video.parentElement; el; el = el.parentElement) el.setAttribute('data-mono-pip-up', '');
                 if (!style) {
                   style = document.createElement('style');
                   style.id = '__mono_pip';
-                  style.textContent = 'video[data-mono-pip]{position:fixed!important;left:0!important;top:0!important;' +
+                  style.textContent =
+                    'html,body{visibility:hidden!important;overflow:hidden!important;background:#000!important}' +
+                    '[data-mono-pip-up]{transform:none!important;filter:none!important;perspective:none!important;' +
+                    'contain:none!important;will-change:auto!important;backdrop-filter:none!important}' +
+                    'video[data-mono-pip]{visibility:visible!important;position:fixed!important;left:0!important;top:0!important;' +
+                    'right:auto!important;bottom:auto!important;margin:0!important;' +
                     'width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;' +
-                    'z-index:2147483647!important;object-fit:contain!important;background:#000!important;transform:none!important}' +
-                    'html,body{overflow:hidden!important}';
+                    'z-index:2147483647!important;object-fit:contain!important;background:#000!important;transform:none!important}';
                   (document.head || document.documentElement).appendChild(style);
                 }
               };
