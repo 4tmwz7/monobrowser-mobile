@@ -28,4 +28,9 @@ class IncomingIntentTest {
         assertEquals(IncomingRequest.NewTab(true), IncomingIntent.parse(IncomingIntent.ACTION_NEW_PRIVATE_TAB, null, null))
         assertEquals(IncomingRequest.None, IncomingIntent.parse("android.intent.action.MAIN", null, null))
     }
+
+    @Test fun widgetSearch() {
+        assertEquals(IncomingRequest.NewTab(isPrivate = false, focusAddress = true), IncomingIntent.parse(IncomingIntent.ACTION_SEARCH, null, null))
+        assertEquals(IncomingRequest.NewTab(isPrivate = true, focusAddress = true), IncomingIntent.parse(IncomingIntent.ACTION_SEARCH_PRIVATE, null, null))
+    }
 }

@@ -6,13 +6,17 @@ import com.voluene.monobrowser.util.UrlUtils
 sealed interface IncomingRequest {
     /** Open [input] (a URL, or text to search for) in a new tab. */
     data class Open(val input: String) : IncomingRequest
-    data class NewTab(val isPrivate: Boolean) : IncomingRequest
+    /** [focusAddress]: straight to typing (the home screen search widget). */
+    data class NewTab(val isPrivate: Boolean, val focusAddress: Boolean = false) : IncomingRequest
     data object None : IncomingRequest
 }
 
 object IncomingIntent {
     const val ACTION_NEW_TAB = "com.voluene.monobrowser.action.NEW_TAB"
     const val ACTION_NEW_PRIVATE_TAB = "com.voluene.monobrowser.action.NEW_PRIVATE_TAB"
+    /** Home screen widget: a new tab with the keyboard up. */
+    const val ACTION_SEARCH = "com.voluene.monobrowser.action.SEARCH"
+    const val ACTION_SEARCH_PRIVATE = "com.voluene.monobrowser.action.SEARCH_PRIVATE"
 
     private const val VIEW = "android.intent.action.VIEW"
     private const val SEND = "android.intent.action.SEND"
@@ -29,6 +33,8 @@ object IncomingIntent {
         SEND, PROCESS_TEXT, WEB_SEARCH -> fromText(text)
         ACTION_NEW_TAB -> IncomingRequest.NewTab(isPrivate = false)
         ACTION_NEW_PRIVATE_TAB -> IncomingRequest.NewTab(isPrivate = true)
+        ACTION_SEARCH -> IncomingRequest.NewTab(isPrivate = false, focusAddress = true)
+        ACTION_SEARCH_PRIVATE -> IncomingRequest.NewTab(isPrivate = true, focusAddress = true)
         else -> IncomingRequest.None
     }
 

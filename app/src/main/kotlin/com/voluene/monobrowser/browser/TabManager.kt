@@ -46,9 +46,7 @@ import com.voluene.monobrowser.settings.PinnedSite
 import android.view.ContextThemeWrapper
 import androidx.webkit.WebSettingsCompat
 import com.voluene.monobrowser.util.StateFile
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import android.webkit.WebStorage
 import android.webkit.WebViewDatabase
 import java.io.File
@@ -271,8 +269,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     val barHidden: StateFlow<Boolean> = _barHidden.asStateFlow()
 
     /** Asks the UI to open the command palette (a blank new tab was opened or reused). */
-    private val _paletteRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val paletteRequests: SharedFlow<Unit> = _paletteRequests.asSharedFlow()
+    // A channel, not a SharedFlow: a request made before the UI collects (the app started from the widget) waits.
+    private val _paletteRequests = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    val paletteRequests: kotlinx.coroutines.flow.Flow<Unit> = _paletteRequests.receiveAsFlow()
 
     private var persistJob: Job? = null
     @Volatile private var pageBackground: Int? = null
@@ -396,7 +395,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
      * User-initiated "new tab" (menu, tab switcher, palette): switches to an existing empty new tab of the same
      * kind instead of creating another one ([NewTabPolicy]). Returns the tab that is now active.
      */
-    fun openNewTab(isPrivate: Boolean = false): Long {
+    /** [focusAddress]: null = the setting (only for a blank new tab); true = always straight to typing (widget). */
+    fun openNewTab(isPrivate: Boolean = false, focusAddress: Boolean? = null): Long {
         // De-duplication is per workspace: an empty tab of another workspace is not reused.
         val reusable = NewTabPolicy.findReusable(
             WorkspaceTabs.inWorkspace(_tabs.value, _currentWorkspaceId.value), _activeTabId.value, isPrivate, settingsFile.value.newTabUrl,
@@ -407,7 +407,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         } else {
             newTab(isPrivate)
         }
-        if (settingsFile.value.newTabUrl == null && settingsFile.value.newTabFocusAddress) _paletteRequests.tryEmit(Unit)
+        val focus = focusAddress ?: (settingsFile.value.newTabFocusAddress && settingsFile.value.newTabUrl == null)
+        if (focus) _paletteRequests.trySend(Unit)
         return id
     }
 

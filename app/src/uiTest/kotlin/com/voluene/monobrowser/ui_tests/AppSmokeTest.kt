@@ -78,6 +78,20 @@ class AppSmokeTest {
         save("tour_palette")
     }
 
+    @Test fun widgetColdStartOpensTheAddressField() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        lateinit var manager: TabManager
+        compose.runOnUiThread {
+            manager = TabManager(app)
+            manager.updateSettings { it.copy(onboardingDone = true) }
+            // What MainActivity does for the widget's intent, before any UI exists.
+            manager.openNewTab(isPrivate = false, focusAddress = true)
+        }
+        compose.setContent { MonoTheme { BrowserScreen(manager) } }
+        save("widget_cold_start")
+        compose.onNodeWithText("Search, enter address or type a command").assertExists()
+    }
+
     @Test fun settingsSearch() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         lateinit var manager: TabManager

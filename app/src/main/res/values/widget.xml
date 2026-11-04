@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_background">#FFFFFF</color>
+    <color name="widget_foreground">#000000</color>
+    <color name="widget_hint">#8A000000</color>
+    <!-- Square on older launchers; Android 12+ uses the launcher's widget radius (values-v31). -->
+    <dimen name="widget_corner">0dp</dimen>
+</resources>

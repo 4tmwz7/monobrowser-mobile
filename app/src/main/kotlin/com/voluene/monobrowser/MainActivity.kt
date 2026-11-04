@@ -152,7 +152,8 @@ class MainActivity : ComponentActivity(), ActivityHost {
         }
         when (val request = IncomingIntent.parse(intent.action, intent.dataString, text)) {
             is IncomingRequest.Open -> tabManager.openExternalInput(request.input)
-            is IncomingRequest.NewTab -> tabManager.openNewTab(isPrivate = request.isPrivate)
+            is IncomingRequest.NewTab ->
+                if (request.focusAddress) tabManager.openNewTab(request.isPrivate, focusAddress = true) else tabManager.openNewTab(request.isPrivate)
             IncomingRequest.None -> Unit
         }
     }

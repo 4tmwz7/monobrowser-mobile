@@ -469,4 +469,6 @@
     <string name="tip_back_text">Zamyka to, co otwarte; w karcie otwartej z linku wraca do karty źródłowej.</string>
     <string name="tip_pull">Pociągnij w dół na górze strony</string>
     <string name="tip_pull_text">Odśwież.</string>
+    <string name="widget_label">Wyszukiwanie MonoBrowser</string>
+    <string name="widget_description">Szukaj lub wpisz adres albo otwórz kartę prywatną z ekranu głównego</string>
 </resources>

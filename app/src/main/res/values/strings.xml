@@ -469,4 +469,6 @@
     <string name="tip_back_text">Closes what is open; on a tab opened from a link it returns to the tab it came from.</string>
     <string name="tip_pull">Pull down at the top of a page</string>
     <string name="tip_pull_text">Reload.</string>
+    <string name="widget_label">MonoBrowser search</string>
+    <string name="widget_description">Search or enter an address, or open a private tab, from the home screen</string>
 </resources>
