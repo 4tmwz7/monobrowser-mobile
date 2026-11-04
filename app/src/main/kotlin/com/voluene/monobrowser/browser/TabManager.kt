@@ -1812,7 +1812,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         }
     }
 
-    override fun play(tabId: Long) = mediaCommand(tabId, "window.__monoMediaPlay && window.__monoMediaPlay()")
+    override fun play(tabId: Long) {
+        mainHandler.post { (webViews[tabId] as? MonoWebView)?.onPlayRequested() }
+        mediaCommand(tabId, "window.__monoMediaPlay && window.__monoMediaPlay()")
+    }
     override fun pause(tabId: Long) = mediaCommand(tabId, "window.__monoMediaPause && window.__monoMediaPause()")
     override fun skip(tabId: Long, forward: Boolean) = mediaCommand(tabId, "window.__monoMediaSkip && window.__monoMediaSkip($forward)")
     override fun seekTo(tabId: Long, positionMs: Long) =

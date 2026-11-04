@@ -19,8 +19,23 @@ class MonoWebView(context: Context) : WebView(context) {
      */
     var keepPlayingInBackground: () -> Boolean = { false }
 
+    /** When the user last asked to play (notification, Now Bar, lock screen): it starts before the page reports it. */
+    private var playRequestedAt = 0L
+
+    private fun keepVisible(): Boolean =
+        keepPlayingInBackground() || android.os.SystemClock.elapsedRealtime() - playRequestedAt < PLAY_GRACE_MS
+
+    /**
+     * Play was pressed outside the app (e.g. after the floating window was closed): Chromium must see the page as
+     * visible before playback starts, or it pauses it again right away.
+     */
+    fun onPlayRequested() {
+        playRequestedAt = android.os.SystemClock.elapsedRealtime()
+        super.onWindowVisibilityChanged(android.view.View.VISIBLE)
+    }
+
     override fun onWindowVisibilityChanged(visibility: Int) {
-        if (visibility != android.view.View.VISIBLE && keepPlayingInBackground()) {
+        if (visibility != android.view.View.VISIBLE && keepVisible()) {
             super.onWindowVisibilityChanged(android.view.View.VISIBLE)
             return
         }
@@ -29,7 +44,11 @@ class MonoWebView(context: Context) : WebView(context) {
 
     /** Playback stopped while the app is in the background: let Chromium know the page is hidden after all. */
     fun applyRealVisibility() {
-        if (!keepPlayingInBackground()) super.onWindowVisibilityChanged(windowVisibility)
+        if (!keepVisible()) super.onWindowVisibilityChanged(windowVisibility)
+    }
+
+    private companion object {
+        const val PLAY_GRACE_MS = 5_000L
     }
 
     override fun onOverScrolled(scrollX: Int, scrollY: Int, clampedX: Boolean, clampedY: Boolean) {
