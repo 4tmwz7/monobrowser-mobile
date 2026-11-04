@@ -39,4 +39,19 @@ class SitePermissionStoreTest {
         assertNull(SitePermissionStore.originOf("file:///x"))
         assertEquals("example.com", SitePermissionStore.hostOf("http://example.com:8080"))
     }
+
+    @Test fun persistsThroughOnChangeAndRestores() {
+        var saved: Map<String, Boolean> = emptyMap()
+        val store = SitePermissionStore { saved = it }
+        store.set("https://a.com", listOf(SitePermission.CAMERA, SitePermission.LOCATION), true)
+        store.set("https://b.com", listOf(SitePermission.MICROPHONE), false)
+        store.forget("https://a.com", SitePermission.LOCATION)
+        assertEquals(mapOf("https://a.com|CAMERA" to true, "https://b.com|MICROPHONE" to false), saved)
+
+        val restored = SitePermissionStore(saved + mapOf("garbage" to true, "https://c.com|TELEPATHY" to true, "ftp://x|CAMERA" to true))
+        assertEquals(true, restored["https://a.com", SitePermission.CAMERA])
+        assertEquals(false, restored["https://b.com", SitePermission.MICROPHONE])
+        assertEquals(2, restored.decisionsList().size)
+        assertEquals(listOf(SitePermission.CAMERA), restored.decisionsFor("https://a.com").map { it.permission })
+    }
 }

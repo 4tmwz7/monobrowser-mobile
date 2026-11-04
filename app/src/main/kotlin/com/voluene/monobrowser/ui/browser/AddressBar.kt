@@ -66,6 +66,9 @@ import com.voluene.monobrowser.R
 import com.voluene.monobrowser.browser.Tab
 import com.voluene.monobrowser.data.HistoryEntry
 import com.voluene.monobrowser.util.UrlUtils
+import com.voluene.monobrowser.util.AddressDisplay
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Warning
 import kotlin.math.roundToInt
 
 /**
@@ -101,6 +104,7 @@ fun AddressBar(
     toolbarTop: Boolean,
     onOpenPalette: () -> Unit,
     onAddressLongPress: () -> Unit,
+    onSiteInfo: () -> Unit,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReloadOrStop: () -> Unit,
@@ -108,6 +112,8 @@ fun AddressBar(
     onTabs: () -> Unit,
     onNewTab: () -> Unit,
     onSwipeTab: (Int) -> Unit,
+    /** Show the whole URL instead of the site's host. */
+    fullAddress: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
     val bg = if (tab.isPrivate) scheme.onBackground else scheme.background
@@ -168,12 +174,35 @@ fun AddressBar(
                     ).padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    shown.ifEmpty { searchLabel },
-                    color = fg.copy(alpha = if (shown.isEmpty()) 0.5f else 1f),
-                    fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                val display = AddressDisplay.of(tab.url)
+                if (display.secure != null) {
+                    // Lock (https) or warning (http): opens the site information sheet.
+                    val siteLabel = stringResource(if (display.secure) R.string.site_secure else R.string.site_not_secure)
+                    Box(
+                        Modifier.padding(end = 4.dp).size(28.dp).clickable(onClickLabel = stringResource(R.string.site_info), onClick = onSiteInfo)
+                            .semantics { contentDescription = siteLabel },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (display.secure) Icons.Filled.Lock else Icons.Filled.Warning, contentDescription = null,
+                            tint = fg.copy(alpha = if (display.secure) 0.8f else 1f), modifier = Modifier.size(15.dp),
+                        )
+                    }
+                }
+                if (display.secure != null && !fullAddress) {
+                    // Modern browsers show the site; the full address is one tap away (the palette).
+                    Text(
+                        display.host, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Text(
+                        shown.ifEmpty { searchLabel },
+                        color = fg.copy(alpha = if (shown.isEmpty()) 0.5f else 1f),
+                        fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 if (tab.blockedCount > 0) {
                     // Blocked-requests counter of this page.
                     val description = stringResource(R.string.tab_blocked_count, tab.blockedCount)

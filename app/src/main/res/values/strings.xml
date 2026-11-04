@@ -196,7 +196,7 @@
     <string name="settings_remove">Remove</string>
     <string name="settings_permissions">Site permissions</string>
     <string name="settings_permissions_hint">Camera, microphone and location decisions</string>
-    <string name="settings_permissions_page_hint">Decisions last until the app is closed. Reset one to be asked again.</string>
+    <string name="settings_permissions_page_hint">Decisions are remembered (private tabs only until the last one is closed). Reset one to be asked again.</string>
     <string name="settings_permissions_empty">No decisions yet.</string>
     <string name="settings_permissions_reset">Reset</string>
     <string name="settings_permissions_reset_all">Reset all</string>
@@ -404,4 +404,20 @@
     <string name="settings_suggestions">Search suggestions</string>
     <string name="settings_suggestions_hint">What you type in the address bar is sent to the search engine. Never in private tabs.</string>
     <string name="palette_refine">Put \"%1$s\" in the address bar</string>
+    <string name="site_info">Site information</string>
+    <string name="site_secure">Connection is secure</string>
+    <string name="site_not_secure">Connection is not secure</string>
+    <string name="site_secure_hint">Information you send to this site is encrypted.</string>
+    <string name="site_not_secure_hint">Do not enter passwords or card details on this site: it can be read or changed on the way.</string>
+    <string name="site_certificate">Certificate from %1$s, valid until %2$s</string>
+    <string name="site_adblock">Ad blocker on this site</string>
+    <string name="site_adblock_count">%1$d blocked on this page</string>
+    <string name="site_adblock_global_off">Content blocking is turned off in settings</string>
+    <string name="site_permissions">Permissions</string>
+    <string name="site_permissions_none">This site has not asked for camera, microphone or location.</string>
+    <string name="site_permission_allowed">Allowed</string>
+    <string name="site_permission_blocked">Blocked</string>
+    <string name="site_permission_reset">Reset</string>
+    <string name="settings_full_address">Show full address</string>
+    <string name="settings_full_address_hint">Otherwise the address bar shows the site, with a lock for secure connections</string>
 </resources>

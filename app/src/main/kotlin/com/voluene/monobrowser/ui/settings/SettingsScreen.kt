@@ -185,6 +185,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             }
             SettingRow(stringResource(R.string.settings_language), languageNames[settings.language], onClick = { dialog = "language" })
             SettingRow(stringResource(R.string.settings_toolbar), toolbarNames[settings.toolbarPosition], onClick = { dialog = "toolbar" })
+            SwitchRow(stringResource(R.string.settings_full_address), stringResource(R.string.settings_full_address_hint), settings.showFullAddress) { v -> update { it.copy(showFullAddress = v) } }
             SettingRow(stringResource(R.string.settings_link_longpress), linkNames[settings.linkLongPress], onClick = { dialog = "linkLongPress" })
 
             Section(stringResource(R.string.settings_section_appearance))

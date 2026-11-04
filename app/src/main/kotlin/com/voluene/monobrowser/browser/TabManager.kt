@@ -115,7 +115,14 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     private val errorUrls = HashMap<Long, String>()
     private var lastNormalActive = 0L
     private var nextDialogId = 1L
-    private val sitePermissions = SitePermissionStore()
+    /** Normal-tab permission decisions survive restarts (`site_permissions.json`); private ones never touch disk. */
+    private val sitePermissionFile = StateFile(
+        File(app.filesDir, "site_permissions.json"), emptyMap<String, Boolean>(),
+        { text -> runCatching { kotlinx.serialization.json.Json.decodeFromString<Map<String, Boolean>>(text) }.getOrNull() },
+        { map -> kotlinx.serialization.json.Json.encodeToString(map) },
+        viewModelScope,
+    )
+    private val sitePermissions = SitePermissionStore(sitePermissionFile.value) { map -> sitePermissionFile.update { map } }
     private val privateSitePermissions = SitePermissionStore()
     private val barScroll = BarScrollTracker()
 
@@ -867,6 +874,35 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         }
         return glance
     }
+
+    // --- Site information (the lock in the address bar) ---
+
+    /** What the site information sheet shows for a tab; null for pages that are not web pages. */
+    data class SiteInfo(
+        val origin: String,
+        val host: String,
+        val secure: Boolean,
+        val certificateIssuer: String?,
+        val certificateValidUntil: Long?,
+        val permissions: List<SitePermissionStore.Decision>,
+    )
+
+    fun siteInfo(tabId: Long): SiteInfo? {
+        val tab = tab(tabId) ?: return null
+        val url = errorUrls[tabId] ?: tab.url
+        val origin = SitePermissionStore.originOf(url) ?: return null
+        val certificate = webViews[tabId]?.certificate?.takeIf { url.startsWith("https", ignoreCase = true) }
+        return SiteInfo(
+            origin = origin,
+            host = SitePermissionStore.hostOf(origin).removePrefix("www."),
+            secure = origin.startsWith("https://"),
+            certificateIssuer = certificate?.issuedBy?.let { it.oName.ifBlank { it.cName } }?.ifBlank { null },
+            certificateValidUntil = certificate?.validNotAfterDate?.time,
+            permissions = storeFor(tabId).decisionsFor(origin),
+        )
+    }
+
+    fun forgetSitePermission(tabId: Long, origin: String, permission: SitePermission) = storeFor(tabId).forget(origin, permission)
 
     // --- Start page ---
 

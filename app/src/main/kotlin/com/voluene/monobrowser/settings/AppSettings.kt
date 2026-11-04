@@ -68,6 +68,8 @@ data class AppSettings(
     val readerSerif: Boolean = true,
     /** Ask the search engine for suggestions while typing (never in private tabs). */
     val searchSuggestions: Boolean = true,
+    /** Address bar: the whole URL instead of the site's host with a lock. */
+    val showFullAddress: Boolean = false,
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String

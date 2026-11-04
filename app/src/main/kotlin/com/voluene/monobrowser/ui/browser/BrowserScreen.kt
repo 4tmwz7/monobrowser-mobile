@@ -124,6 +124,7 @@ fun BrowserScreen(manager: TabManager) {
     var textSizeOpen by remember { mutableStateOf(false) }
     var addressMenuOpen by remember { mutableStateOf(false) }
     var siteOptions by remember { mutableStateOf<TopSite?>(null) }
+    var siteInfo by remember { mutableStateOf<TabManager.SiteInfo?>(null) }
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val toolbarTop = settings.toolbarPosition == ToolbarPosition.TOP
@@ -147,6 +148,7 @@ fun BrowserScreen(manager: TabManager) {
     BackHandler(enabled = addressMenuOpen) { addressMenuOpen = false }
     BackHandler(enabled = siteOptions != null) { siteOptions = null }
     BackHandler(enabled = textSizeOpen) { textSizeOpen = false }
+    BackHandler(enabled = siteInfo != null) { siteInfo = null }
 
     val isWeb = UrlUtils.isHttpUrl(tab.url)
     val siteHost = HostUtils.hostOfUrl(tab.url)
@@ -361,6 +363,8 @@ fun BrowserScreen(manager: TabManager) {
                         toolbarTop = toolbarTop,
                         onOpenPalette = { overlay = Overlay.Palette },
                         onAddressLongPress = { addressMenuOpen = true },
+                        onSiteInfo = { siteInfo = manager.siteInfo(tab.id) },
+                        fullAddress = settings.showFullAddress,
                         onBack = { manager.goBack(tab.id) },
                         onForward = { manager.goForward(tab.id) },
                         onReloadOrStop = { if (tab.isLoading) manager.stop(tab.id) else manager.reload(tab.id) },
@@ -544,6 +548,25 @@ fun BrowserScreen(manager: TabManager) {
                 },
             )
             BrowserMenu(entries, onDismiss = { siteOptions = null }, header = site.host)
+        }
+        siteInfo?.let { info ->
+            val host = HostUtils.hostOfUrl(tab.url)
+            SiteInfoSheet(
+                info = info,
+                blockedCount = tab.blockedCount,
+                adblockEnabled = settings.adblockEnabled,
+                adblockOnForSite = !(host != null && HostUtils.isHostExcepted(host, exceptionHosts.toSet())),
+                desktopMode = tab.desktopMode,
+                onToggleAdblock = { manager.toggleAdblockForSite(tab.id) },
+                onToggleDesktop = { manager.toggleDesktopMode(tab.id) },
+                onResetPermission = { permission ->
+                    manager.forgetSitePermission(tab.id, info.origin, permission)
+                    siteInfo = manager.siteInfo(tab.id)
+                },
+                onCopy = { manager.copyToClipboard(tab.url) },
+                onShare = { shareLink() },
+                onDismiss = { siteInfo = null },
+            )
         }
         if (textSizeOpen) {
             TextSizeDialog(

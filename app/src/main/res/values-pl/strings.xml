@@ -196,7 +196,7 @@
     <string name="settings_remove">Usuń</string>
     <string name="settings_permissions">Uprawnienia witryn</string>
     <string name="settings_permissions_hint">Decyzje o kamerze, mikrofonie i lokalizacji</string>
-    <string name="settings_permissions_page_hint">Decyzje obowiązują do zamknięcia aplikacji. Zresetuj wybraną, aby witryna zapytała ponownie.</string>
+    <string name="settings_permissions_page_hint">Decyzje są zapamiętywane (w kartach prywatnych tylko do zamknięcia ostatniej z nich). Zresetuj decyzję, aby strona zapytała ponownie.</string>
     <string name="settings_permissions_empty">Brak decyzji.</string>
     <string name="settings_permissions_reset">Resetuj</string>
     <string name="settings_permissions_reset_all">Resetuj wszystkie</string>
@@ -404,4 +404,20 @@
     <string name="settings_suggestions">Podpowiedzi wyszukiwania</string>
     <string name="settings_suggestions_hint">To, co wpisujesz w pasku adresu, trafia do wyszukiwarki. Nigdy w kartach prywatnych.</string>
     <string name="palette_refine">Wstaw „%1$s” do paska adresu</string>
+    <string name="site_info">Informacje o stronie</string>
+    <string name="site_secure">Połączenie jest bezpieczne</string>
+    <string name="site_not_secure">Połączenie nie jest bezpieczne</string>
+    <string name="site_secure_hint">Dane wysyłane do tej strony są szyfrowane.</string>
+    <string name="site_not_secure_hint">Nie wpisuj tu haseł ani danych karty: mogą zostać odczytane lub zmienione po drodze.</string>
+    <string name="site_certificate">Certyfikat od %1$s, ważny do %2$s</string>
+    <string name="site_adblock">Blokowanie reklam na tej stronie</string>
+    <string name="site_adblock_count">Zablokowano na tej stronie: %1$d</string>
+    <string name="site_adblock_global_off">Blokowanie treści jest wyłączone w ustawieniach</string>
+    <string name="site_permissions">Uprawnienia</string>
+    <string name="site_permissions_none">Ta strona nie prosiła o kamerę, mikrofon ani lokalizację.</string>
+    <string name="site_permission_allowed">Dozwolone</string>
+    <string name="site_permission_blocked">Zablokowane</string>
+    <string name="site_permission_reset">Resetuj</string>
+    <string name="settings_full_address">Pokazuj pełny adres</string>
+    <string name="settings_full_address_hint">W przeciwnym razie pasek adresu pokazuje stronę, z kłódką przy bezpiecznym połączeniu</string>
 </resources>
