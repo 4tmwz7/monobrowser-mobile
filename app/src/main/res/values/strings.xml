@@ -169,7 +169,7 @@
     <string name="settings_startup_restore">Restore previous tabs</string>
     <string name="settings_startup_newtab">Open a new tab</string>
     <string name="settings_newtab_page">New tab page</string>
-    <string name="settings_newtab_blank">Blank page</string>
+    <string name="settings_newtab_blank">Start page</string>
     <string name="settings_newtab_homepage">Homepage</string>
     <string name="settings_homepage_url">Homepage address</string>
     <string name="settings_homepage_unset">Not set</string>
@@ -353,4 +353,42 @@
     <string name="update_last_check">Last checked</string>
     <string name="update_check_now">Check for updates</string>
     <string name="update_install_version">Update to %1$s</string>
+
+    <!-- Start page, reader view, desktop site -->
+    <string name="menu_desktop_site">Desktop site</string>
+    <string name="menu_reader">Reader view</string>
+    <string name="menu_print">Print / PDF</string>
+    <string name="menu_text_size">Text size</string>
+    <string name="desktop_mode_on">Desktop site on</string>
+    <string name="desktop_mode_off">Desktop site off</string>
+    <string name="print_unavailable">Printing is not available</string>
+    <string name="reader_unavailable">There is no article on this page to show in reader view</string>
+    <string name="reader_minutes">%1$d min read</string>
+    <string name="reader_smaller">Smaller text</string>
+    <string name="reader_larger">Larger text</string>
+    <string name="reader_font_serif">Serif</string>
+    <string name="reader_font_sans">Sans</string>
+    <string name="reader_close">Close reader view</string>
+    <string name="reader_original">Original page</string>
+    <string name="start_top_sites">Top sites</string>
+    <string name="start_recently_closed">Recently closed</string>
+    <string name="start_remove_site">Remove from start page</string>
+    <string name="start_site_removed">Removed %1$s from the start page</string>
+    <string name="start_empty">Sites you visit often will appear here.</string>
+    <string name="start_private_title">Private tab</string>
+    <string name="start_private_text">Pages you open here are not saved in history. Cookies and site data are deleted when you close the last private tab.</string>
+    <string name="settings_top_sites">Top sites on the start page</string>
+    <string name="settings_top_sites_hint">Most visited sites of the last 90 days</string>
+    <string name="settings_restore_top_sites">Restore removed sites</string>
+    <string name="settings_restore_top_sites_hint">%1$d removed</string>
+    <string name="settings_newtab_focus">Keyboard on a new tab</string>
+    <string name="settings_newtab_focus_hint">Go straight to typing instead of showing the start page</string>
+    <string name="settings_text_size">Text size</string>
+    <string name="text_size_value">%1$d%%</string>
+    <string name="text_size_reset">Reset</string>
+    <string name="text_size_sample">The quick brown fox jumps over the lazy dog.</string>
+    <string name="address_copy">Copy address</string>
+    <string name="address_paste_go">Paste and go</string>
+    <string name="address_edit">Edit address</string>
+    <string name="address_share">Share link</string>
 </resources>

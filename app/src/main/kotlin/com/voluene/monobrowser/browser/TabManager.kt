@@ -50,6 +50,10 @@ import java.io.File
 import com.voluene.monobrowser.data.ClosedTab
 import com.voluene.monobrowser.data.HistoryDb
 import com.voluene.monobrowser.data.HistoryEntry
+import com.voluene.monobrowser.data.TopSite
+import com.voluene.monobrowser.data.TopSites
+import com.voluene.monobrowser.reader.Reader
+import com.voluene.monobrowser.reader.ReaderArticle
 import com.voluene.monobrowser.data.PersistedTab
 import com.voluene.monobrowser.data.SessionCodec
 import com.voluene.monobrowser.data.SessionData
@@ -155,10 +159,12 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     @Volatile private var pageBackground: Int? = null
 
     fun updateSettings(transform: (AppSettings) -> AppSettings) {
+        val before = settingsFile.value
         settingsFile.update { SettingsCodec.sanitize(transform(it)) }
         val s = settingsFile.value
         adBlocker.enabled = s.adblockEnabled
         adBlocker.wifiOnlyUpdates = s.wifiOnlyListUpdates
+        if (s.textZoom != before.textZoom) webViews.values.forEach { it.settings.textZoom = s.textZoom }
     }
 
     init {
@@ -177,7 +183,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         } else if (saved != null && saved.tabs.isNotEmpty()) {
             nextId = saved.nextTabId
             _tabs.value = saved.tabs.map {
-                Tab(id = it.id, title = it.title, url = it.url, neverSleep = it.neverSleep, sleeping = true, workspaceId = it.workspaceId)
+                Tab(
+                    id = it.id, title = it.title, url = it.url, neverSleep = it.neverSleep, sleeping = true,
+                    workspaceId = it.workspaceId, desktopMode = it.desktopMode,
+                )
             }
             _recentlyClosed.value = saved.recentlyClosed
             activeByWorkspace.putAll(saved.activeTabIdByWorkspace)
@@ -227,7 +236,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         } else {
             newTab(isPrivate)
         }
-        if (settingsFile.value.newTabUrl == null) _paletteRequests.tryEmit(Unit)
+        if (settingsFile.value.newTabUrl == null && settingsFile.value.newTabFocusAddress) _paletteRequests.tryEmit(Unit)
         return id
     }
 
@@ -276,6 +285,13 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         val id = newTab(url = closed.url)
         update(id) { it.copy(title = closed.title) }
         return true
+    }
+
+    /** A row of the start page's "Recently closed": loads it into [tabId] and drops it from the stack. */
+    fun reopenClosedIn(tabId: Long, closed: ClosedTab) {
+        _recentlyClosed.update { list -> list.filterIndexed { i, c -> !(c == closed && i == list.indexOf(closed)) } }
+        navigate(tabId, closed.url)
+        schedulePersist()
     }
 
     fun setNeverSleep(id: Long, value: Boolean) {
@@ -384,11 +400,17 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
             allowContentAccess = false
             setGeolocationEnabled(true) // every request still goes through the per-origin prompt
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            textZoom = settingsFile.value.textZoom
+            // Pinch-to-zoom without the old on-screen +/- buttons.
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
             if (tab.isPrivate && !privateProfilesSupported) {
                 // Fallback: no separate profile. TODO: real isolation; cookies/storage are shared with normal tabs.
                 cacheMode = WebSettings.LOAD_NO_CACHE
             }
         }
+        if (tab.desktopMode) applyDesktopMode(webView, true)
         pageBackground?.let(webView::setBackgroundColor)
         webView.webViewClient = MonoWebViewClient(tab.id, adBlocker, this, this)
         adBlocker.attach(webView) // adblock: cosmetic
@@ -400,6 +422,30 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         webView.setOnLongClickListener { handleLongPress(tab.id, webView) }
         webView.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY -> onScrolled(tab.id, scrollY - oldScrollY, scrollY) }
         return webView
+    }
+
+    private var mobileUserAgent: String? = null
+
+    private fun applyDesktopMode(webView: WebView, desktop: Boolean) {
+        val settings = webView.settings
+        val mobile = mobileUserAgent ?: settings.userAgentString.also { mobileUserAgent = it }
+        settings.userAgentString = if (desktop) DesktopMode.userAgent(mobile) else null // null = WebView default
+        // Desktop pages are laid out at their full width and zoomed out to fit, like a desktop browser.
+        settings.useWideViewPort = desktop
+        settings.loadWithOverviewMode = desktop
+    }
+
+    /** "Desktop site" on/off for a tab; the page is reloaded with the new user agent. */
+    fun toggleDesktopMode(id: Long) {
+        val tab = _tabs.value.firstOrNull { it.id == id } ?: return
+        val desktop = !tab.desktopMode
+        update(id) { it.copy(desktopMode = desktop) }
+        webViews[id]?.let { webView ->
+            applyDesktopMode(webView, desktop)
+            reload(id)
+        }
+        schedulePersist()
+        toast(if (desktop) R.string.desktop_mode_on else R.string.desktop_mode_off)
     }
 
     private val privateProfilesSupported: Boolean
@@ -435,7 +481,12 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     private fun snapshot(): SessionData {
         val persisted = _tabs.value.filterNot { it.isPrivate }
-            .map { PersistedTab(it.id, errorUrls[it.id] ?: it.url, it.title, isPrivate = false, neverSleep = it.neverSleep, workspaceId = it.workspaceId) }
+            .map {
+                PersistedTab(
+                    it.id, errorUrls[it.id] ?: it.url, it.title, isPrivate = false, neverSleep = it.neverSleep,
+                    workspaceId = it.workspaceId, desktopMode = it.desktopMode,
+                )
+            }
         // A private tab is not saved: fall back to the last normal tab of the same workspace, then to any normal one.
         val active = listOf(_activeTabId.value, activeByWorkspace[_currentWorkspaceId.value] ?: 0L, lastNormalActive)
             .firstOrNull { id -> persisted.any { it.id == id } } ?: 0L
@@ -687,7 +738,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         if (background) toast(R.string.link_opened_background)
     }
 
-    private fun copyToClipboard(text: String) {
+    /** Copies [text] and confirms with a toast. */
+    fun copyToClipboard(text: String) {
         val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
         clipboard?.setPrimaryClip(ClipData.newPlainText(null, text))
         toast(R.string.link_copied)
@@ -749,6 +801,31 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
             viewModelScope.launch(Dispatchers.IO) { runCatching { history.recordVisit(url, title) } }
         }
         return glance
+    }
+
+    // --- Start page ---
+
+    /** Most visited sites for the start page (blocking IO: call from a background dispatcher). */
+    fun topSites(limit: Int = TopSites.DEFAULT_LIMIT): List<TopSite> {
+        val since = System.currentTimeMillis() - TOP_SITES_WINDOW_MS
+        val counts = runCatching { history.mostVisited(since) }.getOrDefault(emptyList())
+        return TopSites.pick(counts, settingsFile.value.hiddenTopSites.toSet(), limit)
+    }
+
+    /** Removes a site from the start page (it comes back only after "Restore removed sites"). */
+    fun hideTopSite(host: String) = updateSettings { it.copy(hiddenTopSites = it.hiddenTopSites + host) }
+
+    // --- Reader view ---
+
+    /** Extracts the active page's text; [onResult] gets null when the page is not an article (main thread). */
+    fun extractArticle(tabId: Long, onResult: (ReaderArticle?) -> Unit) {
+        val webView = webViews[tabId]
+        val tab = tab(tabId)
+        if (webView == null || tab == null || !UrlUtils.isHttpUrl(tab.url) || tabId in errorUrls) {
+            onResult(null)
+            return
+        }
+        webView.evaluateJavascript(Reader.SCRIPT) { raw -> onResult(Reader.parse(raw)) }
     }
 
     // --- Notes ---
@@ -994,5 +1071,6 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     private companion object {
         const val PRIVATE_PROFILE = "private"
         const val PERSIST_DELAY_MS = 1_000L
+        const val TOP_SITES_WINDOW_MS = 90L * 24 * 60 * 60 * 1000
     }
 }

@@ -56,8 +56,19 @@ import com.voluene.monobrowser.ui.palette.PaletteTab
 import com.voluene.monobrowser.ui.settings.SettingsScreen
 import com.voluene.monobrowser.ui.tabs.TabSwitcher
 import com.voluene.monobrowser.util.UrlUtils
+import android.content.ClipboardManager
+import android.print.PrintAttributes
+import android.print.PrintManager
+import android.widget.Toast
+import androidx.compose.runtime.produceState
+import com.voluene.monobrowser.data.TopSite
+import com.voluene.monobrowser.reader.ReaderArticle
+import com.voluene.monobrowser.ui.reader.ReaderScreen
+import com.voluene.monobrowser.ui.start.StartPage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes }
+private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes, Reader }
 
 @Composable
 fun BrowserScreen(manager: TabManager) {
@@ -78,6 +89,10 @@ fun BrowserScreen(manager: TabManager) {
     var overlay by remember { mutableStateOf(Overlay.None) }
     var notesOpenId by remember { mutableStateOf<String?>(null) }
     var creatingWorkspace by remember { mutableStateOf(false) }
+    var readerArticle by remember { mutableStateOf<ReaderArticle?>(null) }
+    var textSizeOpen by remember { mutableStateOf(false) }
+    var addressMenuOpen by remember { mutableStateOf(false) }
+    var siteOptions by remember { mutableStateOf<TopSite?>(null) }
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val toolbarTop = settings.toolbarPosition == ToolbarPosition.TOP
@@ -94,6 +109,9 @@ fun BrowserScreen(manager: TabManager) {
     BackHandler(enabled = overlay == Overlay.None && find != null) { manager.closeFind() }
     BackHandler(enabled = overlay != Overlay.None) { overlay = Overlay.None }
     BackHandler(enabled = linkMenu != null) { manager.dismissLinkMenu() }
+    BackHandler(enabled = addressMenuOpen) { addressMenuOpen = false }
+    BackHandler(enabled = siteOptions != null) { siteOptions = null }
+    BackHandler(enabled = textSizeOpen) { textSizeOpen = false }
 
     val isWeb = UrlUtils.isHttpUrl(tab.url)
     val siteHost = HostUtils.hostOfUrl(tab.url)
@@ -105,6 +123,38 @@ fun BrowserScreen(manager: TabManager) {
         context.startActivity(Intent.createChooser(send, context.getString(R.string.menu_share)))
     }
     fun shareLink() = shareText(tab.url)
+
+    fun toast(res: Int, vararg args: Any) = Toast.makeText(context, context.getString(res, *args), Toast.LENGTH_SHORT).show()
+
+    fun openReader() {
+        val tabId = tab.id
+        manager.extractArticle(tabId) { article ->
+            if (article == null) {
+                toast(R.string.reader_unavailable)
+            } else if (manager.activeTabId.value == tabId) {
+                readerArticle = article
+                overlay = Overlay.Reader
+            }
+        }
+    }
+
+    fun printPage() {
+        val webView = manager.webViewFor(tab.id)
+        val printManager = context.getSystemService(PrintManager::class.java)
+        if (webView == null || printManager == null) {
+            toast(R.string.print_unavailable)
+            return
+        }
+        val name = tab.title.ifBlank { UrlUtils.shortUrlLabel(tab.url) }.ifBlank { context.getString(R.string.app_name) }
+        runCatching { printManager.print(name, webView.createPrintDocumentAdapter(name), PrintAttributes.Builder().build()) }
+            .onFailure { toast(R.string.print_unavailable) }
+    }
+
+    val pasteAndGo = {
+        val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip
+        val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty()
+        if (text.isNotEmpty()) manager.navigate(tab.id, text)
+    }
 
     // Workspaces: the switcher shows (and the tab count counts) only the current workspace.
     val mainLabel = stringResource(R.string.workspace_main)
@@ -126,14 +176,21 @@ fun BrowserScreen(manager: TabManager) {
         MenuTile(R.string.tab_new, Icons.Filled.Add) { manager.openNewTab() },
         MenuTile(R.string.menu_new_private_short, Icons.Filled.Lock) { manager.openNewTab(isPrivate = true) },
         MenuTile(R.string.menu_bookmarks, MenuIcons.Bookmark) { overlay = Overlay.Bookmarks },
-        MenuTile(if (bookmarked) R.string.menu_bookmark_remove else R.string.menu_bookmark_add, if (bookmarked) Icons.Filled.Star else MenuIcons.StarOutline, enabled = isWeb && !tab.isPrivate) { manager.toggleBookmark(tab.id) },
+        MenuTile(
+            if (bookmarked) R.string.menu_bookmark_remove else R.string.menu_bookmark_add,
+            if (bookmarked) Icons.Filled.Star else MenuIcons.StarOutline, enabled = isWeb && !tab.isPrivate, active = bookmarked,
+        ) { manager.toggleBookmark(tab.id) },
         MenuTile(R.string.menu_history, Icons.Filled.DateRange) { overlay = Overlay.History },
         MenuTile(R.string.menu_downloads, MenuIcons.Download) { overlay = Overlay.Downloads },
         MenuTile(R.string.menu_notes, Icons.Filled.Edit) { openNotes(newNote = false) },
         MenuTile(R.string.menu_note_add_short, Icons.Filled.List, enabled = isWeb && !tab.isPrivate) { manager.addPageToNote(tab.id) },
-        MenuTile(R.string.menu_find, Icons.Filled.Search) { manager.openFind() },
+        MenuTile(R.string.menu_find, Icons.Filled.Search, enabled = isWeb) { manager.openFind() },
+        MenuTile(R.string.menu_reader, MenuIcons.Article, enabled = isWeb && !tab.isLoading) { openReader() },
+        MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
+        MenuTile(R.string.menu_text_size, MenuIcons.TextSize) { textSizeOpen = true },
         MenuTile(R.string.menu_reopen_short, Icons.Filled.Refresh, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
-        MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = tab.url.isNotBlank()) { shareLink() },
+        MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() },
+        MenuTile(R.string.menu_print, MenuIcons.Print, enabled = isWeb && !tab.isLoading) { printPage() },
         MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
     )
     val menuInfo = when {
@@ -158,6 +215,16 @@ fun BrowserScreen(manager: TabManager) {
             add(PaletteAction(PaletteActionId.ADD_PAGE_TO_NOTE, stringResource(R.string.notes_add_page), "dodaj strone do notatki add page to note"))
         }
         add(PaletteAction(PaletteActionId.FIND, stringResource(R.string.menu_find), "szukaj na stronie find search page ctrl f"))
+        if (isWeb) {
+            add(PaletteAction(PaletteActionId.READER, stringResource(R.string.menu_reader), "czytnik tryb czytania reader view article artykul"))
+            add(PaletteAction(
+                PaletteActionId.DESKTOP_SITE,
+                stringResource(if (tab.desktopMode) R.string.desktop_mode_off else R.string.menu_desktop_site),
+                "wersja komputerowa desktop site user agent pc",
+            ))
+            add(PaletteAction(PaletteActionId.PRINT, stringResource(R.string.menu_print), "drukuj print pdf zapisz save"))
+        }
+        add(PaletteAction(PaletteActionId.TEXT_SIZE, stringResource(R.string.menu_text_size), "rozmiar tekstu czcionka text size font zoom powiekszenie"))
         if (isWeb) {
             add(PaletteAction(
                 PaletteActionId.TOGGLE_ADBLOCK_SITE,
@@ -219,6 +286,10 @@ fun BrowserScreen(manager: TabManager) {
             PaletteActionId.ADD_PAGE_TO_NOTE -> manager.addPageToNote(tab.id)
             PaletteActionId.NEW_WORKSPACE -> creatingWorkspace = true
             PaletteActionId.SWITCH_WORKSPACE -> action.arg?.let(manager::switchWorkspace)
+            PaletteActionId.READER -> openReader()
+            PaletteActionId.DESKTOP_SITE -> manager.toggleDesktopMode(tab.id)
+            PaletteActionId.PRINT -> printPage()
+            PaletteActionId.TEXT_SIZE -> textSizeOpen = true
         }
     }
 
@@ -233,7 +304,13 @@ fun BrowserScreen(manager: TabManager) {
         }
     }
 
-    val barVisible = !barHidden || overlay != Overlay.None
+    // A blank tab shows the start page over its (empty) WebView.
+    val showStart = !tab.canGoBack && !tab.isLoading && (tab.url.isBlank() || UrlUtils.isAboutBlankUrl(tab.url))
+    val topSites by produceState<List<TopSite>?>(null, showStart, settings.showTopSites, settings.hiddenTopSites, tab.id) {
+        value = if (showStart && settings.showTopSites && !tab.isPrivate) withContext(Dispatchers.IO) { manager.topSites() } else value
+    }
+
+    val barVisible = !barHidden || overlay != Overlay.None || showStart
     val barBg = if (tab.isPrivate) scheme.onBackground else scheme.background
 
     Box(Modifier.fillMaxSize().background(scheme.background)) {
@@ -247,6 +324,7 @@ fun BrowserScreen(manager: TabManager) {
                         tabCount = workspaceTabs.size,
                         toolbarTop = toolbarTop,
                         onOpenPalette = { overlay = Overlay.Palette },
+                        onAddressLongPress = { addressMenuOpen = true },
                         onBack = { manager.goBack(tab.id) },
                         onForward = { manager.goForward(tab.id) },
                         onReloadOrStop = { if (tab.isLoading) manager.stop(tab.id) else manager.reload(tab.id) },
@@ -268,6 +346,18 @@ fun BrowserScreen(manager: TabManager) {
                     onRefresh = { manager.reload(tab.id) },
                     lineAtBottom = !toolbarTop,
                 )
+                if (showStart) {
+                    StartPage(
+                        isPrivate = tab.isPrivate,
+                        topSites = topSites,
+                        showTopSites = settings.showTopSites,
+                        recentlyClosed = if (tab.isPrivate) emptyList() else recentlyClosed,
+                        onSearch = { overlay = Overlay.Palette },
+                        onOpen = { manager.navigate(tab.id, it) },
+                        onSiteOptions = { siteOptions = it },
+                        onReopen = { manager.reopenClosedIn(tab.id, it) },
+                    )
+                }
                 if (manager.updater.enabled) {
                     UpdateBanner(
                         updater = manager.updater,
@@ -345,6 +435,16 @@ fun BrowserScreen(manager: TabManager) {
                 onOpenUrl = { manager.newTab(url = it); overlay = Overlay.None },
                 onClose = { overlay = Overlay.None },
             )
+            Overlay.Reader -> readerArticle?.let { article ->
+                ReaderScreen(
+                    article = article,
+                    fontSize = settings.readerFontSize,
+                    serif = settings.readerSerif,
+                    onFontSize = { size -> manager.updateSettings { it.copy(readerFontSize = size) } },
+                    onSerif = { serif -> manager.updateSettings { it.copy(readerSerif = serif) } },
+                    onClose = { overlay = Overlay.None; readerArticle = null },
+                )
+            }
             Overlay.Palette -> {
                 val initial = remember { if (tab.url.isBlank() || UrlUtils.isAboutBlankUrl(tab.url)) "" else UrlUtils.displayUrl(tab.url) }
                 PaletteScreen(
@@ -367,6 +467,34 @@ fun BrowserScreen(manager: TabManager) {
                 MenuEntry(linkMenuLabel(action)) { if (action == LinkMenuAction.SHARE) shareText(state.url) else manager.runLinkAction(state, action) }
             }
             BrowserMenu(entries, onDismiss = manager::dismissLinkMenu, header = state.url)
+        }
+        if (addressMenuOpen) {
+            val hasClip = context.getSystemService(ClipboardManager::class.java)?.hasPrimaryClip() == true
+            val entries = buildList {
+                if (isWeb) add(MenuEntry(R.string.address_copy) { manager.copyToClipboard(tab.url) })
+                add(MenuEntry(R.string.address_paste_go, enabled = hasClip) { pasteAndGo() })
+                add(MenuEntry(R.string.address_edit) { overlay = Overlay.Palette })
+                if (isWeb) add(MenuEntry(R.string.address_share) { shareLink() })
+            }
+            BrowserMenu(entries, onDismiss = { addressMenuOpen = false }, header = if (isWeb) tab.url else null)
+        }
+        siteOptions?.let { site ->
+            val entries = listOf(
+                MenuEntry(R.string.link_open_tab) { manager.newTab(url = site.url) },
+                MenuEntry(R.string.link_copy) { manager.copyToClipboard(site.url) },
+                MenuEntry(R.string.start_remove_site) {
+                    manager.hideTopSite(site.host)
+                    toast(R.string.start_site_removed, site.host)
+                },
+            )
+            BrowserMenu(entries, onDismiss = { siteOptions = null }, header = site.host)
+        }
+        if (textSizeOpen) {
+            TextSizeDialog(
+                zoom = settings.textZoom,
+                onChange = { zoom -> manager.updateSettings { it.copy(textZoom = zoom) } },
+                onDismiss = { textSizeOpen = false },
+            )
         }
         glance?.let { g ->
             GlanceSheet(

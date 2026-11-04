@@ -164,6 +164,16 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             SettingRow(stringResource(R.string.settings_newtab_page), newTabNames[settings.newTabPage], onClick = { dialog = "newtab" })
             if (settings.newTabPage == NewTabPage.HOMEPAGE) {
                 SettingRow(stringResource(R.string.settings_homepage_url), settings.homepageUrl.ifEmpty { stringResource(R.string.settings_homepage_unset) }, onClick = { dialog = "homepage" })
+            } else {
+                SwitchRow(stringResource(R.string.settings_top_sites), stringResource(R.string.settings_top_sites_hint), settings.showTopSites) { v -> update { it.copy(showTopSites = v) } }
+                if (settings.hiddenTopSites.isNotEmpty()) {
+                    SettingRow(
+                        stringResource(R.string.settings_restore_top_sites),
+                        stringResource(R.string.settings_restore_top_sites_hint, settings.hiddenTopSites.size),
+                        onClick = { update { it.copy(hiddenTopSites = emptyList()) } },
+                    )
+                }
+                SwitchRow(stringResource(R.string.settings_newtab_focus), stringResource(R.string.settings_newtab_focus_hint), settings.newTabFocusAddress) { v -> update { it.copy(newTabFocusAddress = v) } }
             }
             SettingRow(stringResource(R.string.settings_language), languageNames[settings.language], onClick = { dialog = "language" })
             SettingRow(stringResource(R.string.settings_toolbar), toolbarNames[settings.toolbarPosition], onClick = { dialog = "toolbar" })
@@ -172,6 +182,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             Section(stringResource(R.string.settings_section_appearance))
             SettingRow(stringResource(R.string.settings_theme), themeName, onClick = { open(Page.Theme) })
             SettingRow(stringResource(R.string.settings_mode), modeNames[settings.themeMode], onClick = { dialog = "mode" })
+            SettingRow(stringResource(R.string.settings_text_size), stringResource(R.string.text_size_value, settings.textZoom), onClick = { dialog = "textSize" })
 
             Section(stringResource(R.string.settings_section_privacy))
             SwitchRow(stringResource(R.string.settings_adblock), stringResource(R.string.settings_adblock_hint), settings.adblockEnabled) { v -> update { it.copy(adblockEnabled = v) } }
@@ -223,6 +234,11 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
         "language" -> ChoiceDialog(stringResource(R.string.settings_language), languageNames.toList(), settings.language, { c -> update { it.copy(language = c) } }, { dialog = null })
         "toolbar" -> ChoiceDialog(stringResource(R.string.settings_toolbar), toolbarNames.toList(), settings.toolbarPosition, { c -> update { it.copy(toolbarPosition = c) } }, { dialog = null })
         "linkLongPress" -> ChoiceDialog(stringResource(R.string.settings_link_longpress), linkNames.toList(), settings.linkLongPress, { c -> update { it.copy(linkLongPress = c) } }, { dialog = null })
+        "textSize" -> com.voluene.monobrowser.ui.browser.TextSizeDialog(
+            zoom = settings.textZoom,
+            onChange = { zoom -> update { it.copy(textZoom = zoom) } },
+            onDismiss = { dialog = null },
+        )
         "mode" -> ChoiceDialog(stringResource(R.string.settings_mode), modeNames.toList(), settings.themeMode, { c -> update { it.copy(themeMode = c) } }, { dialog = null })
         "customUrl" -> TextInputDialog(
             stringResource(R.string.settings_custom_url), settings.customSearchUrl.takeIf { settings.searchEngine == SearchEngine.CUSTOM }.orEmpty(),

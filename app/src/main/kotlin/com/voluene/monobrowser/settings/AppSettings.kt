@@ -55,6 +55,17 @@ data class AppSettings(
     val onboardingDone: Boolean = false,
     /** Release builds: look for a new version on start and every 6 h (never downloads without a tap). */
     val autoUpdateCheck: Boolean = true,
+    /** Page text size in percent (WebSettings.textZoom). */
+    val textZoom: Int = 100,
+    /** Start page (blank new tab): show the most visited sites. */
+    val showTopSites: Boolean = true,
+    /** Sites (host keys, see `TopSites.hostKey`) removed from the start page. */
+    val hiddenTopSites: List<String> = emptyList(),
+    /** A new blank tab opens the command palette with the keyboard right away (otherwise the start page shows). */
+    val newTabFocusAddress: Boolean = false,
+    /** Reader view text size in sp. */
+    val readerFontSize: Int = DEFAULT_READER_FONT_SIZE,
+    val readerSerif: Boolean = true,
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String
@@ -66,6 +77,10 @@ data class AppSettings(
 
     companion object {
         const val DEFAULT_CUSTOM_SEARCH_URL = "https://example.com/search?q={query}"
+        const val DEFAULT_READER_FONT_SIZE = 18
+        val READER_FONT_RANGE = 14..30
+        val TEXT_ZOOM_STEPS = listOf(75, 85, 100, 115, 130, 150, 175, 200)
+        const val MAX_HIDDEN_TOP_SITES = 200
     }
 }
 
@@ -104,6 +119,10 @@ object SettingsCodec {
             // but if the user never configured one the default engine is safer than example.com.
             searchEngine = if (s.searchEngine == SearchEngine.CUSTOM && custom == AppSettings.DEFAULT_CUSTOM_SEARCH_URL) SearchEngine.GOOGLE else s.searchEngine,
             newTabPage = if (s.newTabPage == NewTabPage.HOMEPAGE && home.isEmpty()) NewTabPage.BLANK else s.newTabPage,
+            textZoom = s.textZoom.coerceIn(50, 300),
+            readerFontSize = s.readerFontSize.coerceIn(AppSettings.READER_FONT_RANGE.first, AppSettings.READER_FONT_RANGE.last),
+            hiddenTopSites = s.hiddenTopSites.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+                .takeLast(AppSettings.MAX_HIDDEN_TOP_SITES),
         )
     }
 }

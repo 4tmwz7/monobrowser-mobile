@@ -18,6 +18,8 @@ data class Tab(
     val sleeping: Boolean = false,
     /** Workspace the tab belongs to (private tabs too: they live in the workspace they were opened in). */
     val workspaceId: String = WorkspaceOps.MAIN_ID,
+    /** "Desktop site": desktop user agent and an overview-sized viewport. */
+    val desktopMode: Boolean = false,
 ) {
     val isLoading: Boolean get() = progress in 0..99
 }

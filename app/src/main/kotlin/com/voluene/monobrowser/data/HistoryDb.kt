@@ -74,6 +74,17 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
         }
     }
 
+    /** Visit counts per URL since [since] (newest visits first when counts tie), for the start page's top sites. */
+    fun mostVisited(since: Long, limit: Int = 200): List<VisitCount> =
+        readableDatabase.rawQuery(
+            "SELECT url, (SELECT h2.title FROM history h2 WHERE h2.url = h.url AND h2.title != '' ORDER BY h2._id DESC LIMIT 1), " +
+                "COUNT(*) AS c, MAX(visited_at) AS t FROM history h WHERE visited_at >= ? " +
+                "GROUP BY url ORDER BY c DESC, t DESC LIMIT $limit",
+            arrayOf(since.toString()),
+        ).use { c ->
+            buildList { while (c.moveToNext()) add(VisitCount(c.getString(0), c.getString(1).orEmpty(), c.getInt(2), c.getLong(3))) }
+        }
+
     fun delete(id: Long) {
         writableDatabase.delete("history", "_id = ?", arrayOf(id.toString()))
     }

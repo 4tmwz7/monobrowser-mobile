@@ -3,6 +3,8 @@ package com.voluene.monobrowser.ui.browser
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Box
@@ -86,12 +88,14 @@ fun CollapsingBar(visible: Boolean, modifier: Modifier = Modifier, fromTop: Bool
  * with a thin load-progress line on the edge facing the page. It sits at the bottom (thumb reach) or the top
  * ([toolbarTop]). Private tabs get an inverted bar. Swiping it sideways switches tabs.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AddressBar(
     tab: Tab,
     tabCount: Int,
     toolbarTop: Boolean,
     onOpenPalette: () -> Unit,
+    onAddressLongPress: () -> Unit,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReloadOrStop: () -> Unit,
@@ -137,7 +141,12 @@ fun AddressBar(
             val searchLabel = stringResource(R.string.address_hint)
             Row(
                 Modifier.weight(1f).height(36.dp).border(1.dp, fg, RectangleShape)
-                    .clickable(onClickLabel = searchLabel, onClick = onOpenPalette).padding(horizontal = 8.dp),
+                    .combinedClickable(
+                        onClickLabel = searchLabel,
+                        onLongClickLabel = stringResource(R.string.address_copy),
+                        onLongClick = onAddressLongPress,
+                        onClick = onOpenPalette,
+                    ).padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(

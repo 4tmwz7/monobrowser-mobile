@@ -85,6 +85,8 @@ data class MenuTile(
     @param:StringRes val label: Int,
     val icon: ImageVector,
     val enabled: Boolean = true,
+    /** A toggle that is on (desktop site, bookmarked page): drawn inverted. */
+    val active: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -96,7 +98,7 @@ data class MenuInfo(val text: String, val toggleLabel: String? = null, val toggl
  * content so it fits a phone screen without scrolling; it only scrolls (last resort) on very small screens.
  */
 @Composable
-fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Unit, columns: Int = 3) {
+fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Unit, columns: Int = 4) {
     val scheme = MaterialTheme.colorScheme
     Scrim(onDismiss) {
         Column(
@@ -128,16 +130,18 @@ fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Uni
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState())) {
                 tiles.chunked(columns).forEachIndexed { rowIndex, row ->
                     if (rowIndex > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(scheme.outlineVariant))
-                    Row(Modifier.fillMaxWidth().height(84.dp)) {
+                    Row(Modifier.fillMaxWidth().height(80.dp)) {
                         for (i in 0 until columns) {
                             if (i > 0) Box(Modifier.fillMaxHeight().width(1.dp).background(scheme.outlineVariant))
                             val tile = row.getOrNull(i)
                             if (tile == null) {
                                 Box(Modifier.weight(1f).fillMaxHeight())
                             } else {
-                                val color = scheme.onBackground.copy(alpha = if (tile.enabled) 1f else 0.35f)
+                                val base = if (tile.active) scheme.background else scheme.onBackground
+                                val color = base.copy(alpha = if (tile.enabled) 1f else 0.35f)
                                 Column(
                                     Modifier.weight(1f).fillMaxHeight()
+                                        .then(if (tile.active) Modifier.background(scheme.onBackground) else Modifier)
                                         .clickable(enabled = tile.enabled) { onDismiss(); tile.onClick() }
                                         .padding(horizontal = 4.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -145,7 +149,7 @@ fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Uni
                                 ) {
                                     Icon(tile.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
                                     Text(
-                                        stringResource(tile.label), color = color, fontSize = 12.sp, textAlign = TextAlign.Center,
+                                        stringResource(tile.label), color = color, fontSize = 11.sp, textAlign = TextAlign.Center,
                                         maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp, modifier = Modifier.padding(top = 6.dp),
                                     )
                                 }

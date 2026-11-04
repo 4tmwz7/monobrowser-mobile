@@ -14,6 +14,8 @@ data class PersistedTab(
     val neverSleep: Boolean = false,
     /** Workspace of the tab; files from before workspaces existed load into the main one. */
     val workspaceId: String = WorkspaceOps.MAIN_ID,
+    /** "Desktop site" was requested for this tab. */
+    val desktopMode: Boolean = false,
 )
 
 @Serializable
