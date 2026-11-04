@@ -103,6 +103,17 @@ class MainActivity : ComponentActivity(), ActivityHost {
         }.onFailure { onResult(false) }
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // RUNNING_LOW while visible, or BACKGROUND and worse while in the background.
+        @Suppress("DEPRECATION")
+        if (level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+        ) tabManager.onLowMemory()
+    }
+
     override fun onStart() {
         super.onStart()
         tabManager.onAppVisible(true)

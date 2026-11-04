@@ -146,5 +146,9 @@ class AppSmokeTest {
         compose.runOnUiThread { manager.updateSettings { it.copy(webDarkMode = com.voluene.monobrowser.settings.WebDarkMode.OFF) } }
         save("app_dark_weboff")
         org.junit.Assert.assertTrue("web dark off -> light web context", isLight())
+        // Memory pressure and background / foreground must not break the visible tab.
+        compose.runOnUiThread { manager.newTab(url = "https://example.com/"); manager.onLowMemory(); manager.onAppVisible(false); manager.onAppVisible(true) }
+        save("app_after_low_memory")
+        org.junit.Assert.assertNotNull(manager.webViewFor(manager.activeTabId.value))
     }
 }

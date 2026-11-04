@@ -196,8 +196,15 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         val location = IntArray(2).also(webView::getLocationInWindow)
         val source = android.graphics.Rect(location[0], location[1], location[0] + webView.width, location[1] + visibleHeight)
         activityHost.copyFromScreen(source, bitmap) { ok ->
-            if (ok) storeThumbnail(id, bitmap)
             then()
+            if (!ok) return@copyFromScreen
+            // Half the memory: RGB_565 is plenty for a small greyscale preview (converted off the main thread).
+            viewModelScope.launch {
+                val small = withContext(Dispatchers.Default) {
+                    runCatching { bitmap.copy(Bitmap.Config.RGB_565, false).also { bitmap.recycle() } }.getOrDefault(bitmap)
+                }
+                storeThumbnail(id, small)
+            }
         }
     }
 
@@ -775,6 +782,23 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         webViews.values.forEach { it.destroy() }
         webViews.clear()
         history.close()
+    }
+
+    // --- Memory pressure ---
+
+    /**
+     * The system is short of memory: drop the tab previews and put every tab that is not on screen to sleep (its
+     * state is saved and it wakes when shown). Tabs marked "never sleep", private tabs and tabs playing media stay.
+     */
+    fun onLowMemory() {
+        _thumbnails.value = emptyMap()
+        val active = _activeTabId.value
+        webViews.keys.toList().forEach { id ->
+            val tab = _tabs.value.firstOrNull { it.id == id } ?: return@forEach
+            if (id == active || tab.neverSleep || tab.isPrivate) return@forEach
+            val webView = webViews[id] ?: return@forEach
+            isPlayingMedia(webView) { playing -> if (!playing && id != _activeTabId.value) sleep(id) }
+        }
     }
 
     // --- Background work: pause what nobody sees, unless it is playing sound or video ---
