@@ -118,3 +118,21 @@ dependencies {
 // adblock: Rust engine (native/adblock) via cargo-ndk -> jniLibs
 apply(from = "adblock-native.gradle.kts")
 android.sourceSets.getByName("main").jniLibs.directories.add("build/rustJniLibs")
+
+// ---- UI tests (opt-in): Robolectric renders the real Compose UI on the JVM, without a device ----
+// ./gradlew testDebugUnitTest -Pui.tests=true -Padblock.skipNative=true   (screenshots land in build/screenshots)
+// Off by default: Robolectric downloads a ~200 MB Android image on first use, which CI does not need for every push.
+if (providers.gradleProperty("ui.tests").orNull == "true") {
+    android.sourceSets.getByName("test").kotlin.directories.add("src/uiTest/kotlin")
+    android.testOptions.unitTests.isIncludeAndroidResources = true
+    dependencies {
+        testImplementation(libs.robolectric)
+        testImplementation(platform(libs.androidx.compose.bom))
+        testImplementation(libs.androidx.compose.ui.test.junit4)
+        debugImplementation(libs.androidx.compose.ui.test.manifest)
+    }
+    tasks.withType<Test>().configureEach {
+        systemProperty("screenshots.dir", rootProject.file("build/screenshots").absolutePath)
+        maxHeapSize = "3g"
+    }
+}

@@ -25,7 +25,15 @@ echo "sdk.dir=$HOME/Android/Sdk" > local.properties
 ./gradlew assembleDebug testDebugUnitTest
 ```
 
-The APK lands in `app/build/outputs/apk/debug/`. The Rust ad blocker needs `cargo-ndk`, the Android rust targets and NDK 27.1 (`-Padblock.skipNative=true` skips it).
+The APK lands in `app/build/outputs/apk/debug/`.
+
+UI tests (opt-in): Robolectric renders the real Compose screens on the JVM, without a device or emulator, drives the app (menu, settings, tabs, back gestures, reading list, dark pages) and saves screenshots to `build/screenshots/`:
+
+```sh
+./gradlew testDebugUnitTest -Pui.tests=true -Padblock.skipNative=true
+```
+
+The first run downloads Robolectric's Android image (~200 MB), which is why CI does not run them on every push. The Rust ad blocker needs `cargo-ndk`, the Android rust targets and NDK 27.1 (`-Padblock.skipNative=true` skips it).
 
 ### Release build and signing
 
