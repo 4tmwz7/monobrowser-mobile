@@ -1,5 +1,7 @@
 package com.voluene.monobrowser.ui.browser
 
+import com.voluene.monobrowser.ui.common.rememberScreenAwareShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -51,8 +53,9 @@ fun FindBar(
     var text by remember { mutableStateOf(state.query) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
+    val corners = rememberScreenAwareShape()
     Row(
-        modifier.background(scheme.background).border(1.dp, scheme.outline, RectangleShape).padding(start = 8.dp),
+        modifier.then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape).padding(start = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f).height(36.dp), contentAlignment = Alignment.CenterStart) {

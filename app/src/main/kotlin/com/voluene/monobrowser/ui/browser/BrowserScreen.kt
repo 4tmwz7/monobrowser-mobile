@@ -66,11 +66,39 @@ import com.voluene.monobrowser.reader.ReaderArticle
 import com.voluene.monobrowser.ui.reader.ReaderScreen
 import com.voluene.monobrowser.ui.start.StartPage
 import com.voluene.monobrowser.ui.common.BackStyle
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import com.voluene.monobrowser.ui.common.PredictiveBackContainer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes, Reader }
+
+/**
+ * Overlay transitions: pages fade in while growing from 96 %, the menu sheet slides up from the bottom; leaving
+ * reverses it. Switching straight from one overlay to another (menu -> settings) crossfades.
+ */
+private fun AnimatedContentTransitionScope<Overlay>.overlayTransition(from: Overlay, to: Overlay): ContentTransform {
+    val pageIn = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.96f)
+    val pageOut = fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.96f)
+    val sheetIn = slideInVertically(tween(220)) { it / 2 } + fadeIn(tween(160))
+    val sheetOut = slideOutVertically(tween(180)) { it / 2 } + fadeOut(tween(180))
+    val enter = when (to) { Overlay.None -> EnterTransition.None; Overlay.Menu -> sheetIn; else -> pageIn }
+    val exit = when (from) { Overlay.None -> ExitTransition.None; Overlay.Menu -> sheetOut; else -> pageOut }
+    // The overlay that is coming in is drawn on top.
+    return (enter togetherWith exit).apply { targetContentZIndex = if (to == Overlay.None) 0f else 1f }
+}
 
 @Composable
 fun BrowserScreen(manager: TabManager) {
@@ -387,11 +415,19 @@ fun BrowserScreen(manager: TabManager) {
             if (!toolbarTop) bar()
         } }
         // Full-screen overlays (and the menu sheet) follow the predictive back gesture.
-        if (overlay != Overlay.None) androidx.compose.runtime.key(overlay) { PredictiveBackContainer(
+        AnimatedContent(
+            targetState = overlay,
+            transitionSpec = { overlayTransition(initialState, targetState) },
+            contentAlignment = Alignment.BottomCenter,
+            label = "overlay",
+        ) { shown ->
+        if (shown != Overlay.None) PredictiveBackContainer(
             onBack = { overlay = Overlay.None },
-            style = if (overlay == Overlay.Menu) BackStyle.SHEET else BackStyle.PAGE,
+            // Only the overlay on screen listens; one that is animating out ignores a second back.
+            enabled = shown == overlay,
+            style = if (shown == Overlay.Menu) BackStyle.SHEET else BackStyle.PAGE,
         ) {
-        when (overlay) {
+        when (shown) {
             Overlay.None -> Unit
             Overlay.Menu -> BrowserMenuGrid(menuTiles, menuInfo, onDismiss = { overlay = Overlay.None })
             Overlay.Tabs -> TabSwitcher(
@@ -456,7 +492,7 @@ fun BrowserScreen(manager: TabManager) {
                     serif = settings.readerSerif,
                     onFontSize = { size -> manager.updateSettings { it.copy(readerFontSize = size) } },
                     onSerif = { serif -> manager.updateSettings { it.copy(readerSerif = serif) } },
-                    onClose = { overlay = Overlay.None; readerArticle = null },
+                    onClose = { overlay = Overlay.None }, // the article stays for the exit animation
                 )
             }
             Overlay.Palette -> {

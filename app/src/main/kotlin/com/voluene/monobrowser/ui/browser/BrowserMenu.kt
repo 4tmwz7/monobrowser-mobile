@@ -1,5 +1,7 @@
 package com.voluene.monobrowser.ui.browser
 
+import com.voluene.monobrowser.ui.common.rememberScreenAwareShape
+import androidx.compose.ui.draw.clip
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,10 +52,12 @@ data class MenuEntry(
 @Composable
 fun BrowserMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, header: String? = null) {
     val scheme = MaterialTheme.colorScheme
+    // The sheet's bottom corners follow the screen's rounded corners.
+    val corners = rememberScreenAwareShape()
     Scrim(onDismiss) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .background(scheme.background).border(1.dp, scheme.outline, RectangleShape)
+                .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {}.navigationBarsPadding(),
         ) {
             if (header != null) {
@@ -100,10 +104,12 @@ data class MenuInfo(val text: String, val toggleLabel: String? = null, val toggl
 @Composable
 fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Unit, columns: Int = 4) {
     val scheme = MaterialTheme.colorScheme
+    // The sheet's bottom corners follow the screen's rounded corners.
+    val corners = rememberScreenAwareShape()
     Scrim(onDismiss) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .background(scheme.background).border(1.dp, scheme.outline, RectangleShape)
+                .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {}.navigationBarsPadding(),
         ) {
             if (info != null) {

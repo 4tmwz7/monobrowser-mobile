@@ -1,5 +1,7 @@
 package com.voluene.monobrowser.ui.update
 
+import com.voluene.monobrowser.ui.common.rememberScreenAwareShape
+import androidx.compose.ui.draw.clip
 import android.content.ActivityNotFoundException
 import android.content.Context
 import androidx.compose.foundation.background
@@ -146,8 +148,9 @@ fun UpdateBanner(updater: UpdateManager, onOpenUrl: (String) -> Unit, modifier: 
     var showNotes by remember { mutableStateOf(false) }
     if (showNotes) UpdateNotesSheet(updater, release, onOpenUrl, onDismiss = { showNotes = false })
     val scheme = MaterialTheme.colorScheme
+    val corners = rememberScreenAwareShape()
     Column(
-        modifier.fillMaxWidth().background(scheme.background).border(1.dp, scheme.onBackground, RectangleShape).padding(12.dp),
+        modifier.fillMaxWidth().then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.onBackground, corners.shape).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
@@ -185,9 +188,10 @@ fun UpdateNotesSheet(updater: UpdateManager, release: ReleaseInfo, onOpenUrl: (S
     val date = releaseDate(release.publishedAt)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Scrim(onDismiss) {
+            val corners = rememberScreenAwareShape()
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp)
-                    .background(scheme.background).border(2.dp, scheme.outline, RectangleShape)
+                    .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(2.dp, scheme.outline, corners.shape)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                     .navigationBarsPadding().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),

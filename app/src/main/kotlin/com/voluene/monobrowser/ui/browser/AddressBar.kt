@@ -1,5 +1,8 @@
 package com.voluene.monobrowser.ui.browser
 
+import com.voluene.monobrowser.ui.common.rememberScreenAwareShape
+import com.voluene.monobrowser.ui.common.cornerSafeHorizontalPadding
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -146,12 +149,17 @@ fun AddressBar(
             },
     ) {
         if (!toolbarTop) progress()
-        Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+        // On phones with rounded screen corners the outermost buttons move in just enough to stay clear of the curve.
+        Row(
+            Modifier.fillMaxWidth().height(48.dp).cornerSafeHorizontalPadding(fromBottom = !toolbarTop),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             BarButton(Icons.AutoMirrored.Filled.ArrowBack, R.string.action_back, tab.canGoBack, fg, onBack)
             BarButton(Icons.AutoMirrored.Filled.ArrowForward, R.string.action_forward, tab.canGoForward, fg, onForward)
             val searchLabel = stringResource(R.string.address_hint)
+            val fieldCorners = rememberScreenAwareShape()
             Row(
-                Modifier.weight(1f).height(36.dp).border(1.dp, fg, RectangleShape)
+                Modifier.weight(1f).height(36.dp).then(fieldCorners.modifier).clip(fieldCorners.shape).border(1.dp, fg, fieldCorners.shape)
                     .combinedClickable(
                         onClickLabel = searchLabel,
                         onLongClickLabel = stringResource(R.string.address_copy),
@@ -182,8 +190,11 @@ fun AddressBar(
             )
             BarButton(Icons.Default.MoreVert, R.string.action_menu, true, fg, onMenu)
             val tabsLabel = stringResource(R.string.action_tabs, tabCount)
+            // Sits right in the bottom (or top) corner of the screen: follow its curve.
+            val counterCorners = rememberScreenAwareShape()
             Box(
-                Modifier.padding(horizontal = 6.dp).size(32.dp).border(1.dp, fg, RectangleShape)
+                Modifier.padding(horizontal = 6.dp).size(32.dp).then(counterCorners.modifier).clip(counterCorners.shape)
+                    .border(1.dp, fg, counterCorners.shape)
                     .combinedClickable(
                         onClickLabel = tabsLabel,
                         onLongClickLabel = stringResource(R.string.tab_new),

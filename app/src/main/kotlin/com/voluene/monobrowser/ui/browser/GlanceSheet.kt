@@ -1,5 +1,7 @@
 package com.voluene.monobrowser.ui.browser
 
+import com.voluene.monobrowser.ui.common.rememberScreenAwareShape
+import androidx.compose.ui.draw.clip
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.FrameLayout
@@ -48,10 +50,11 @@ fun GlanceSheet(
 ) {
     val scheme = MaterialTheme.colorScheme
     // System back (with its predictive animation) is handled by the caller's PredictiveBackContainer.
+    val corners = rememberScreenAwareShape()
     Scrim(onClose) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HEIGHT_FRACTION)
-                .background(scheme.background).border(1.dp, scheme.outline, RectangleShape)
+                .then(corners.modifier).clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {},
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -19,6 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -61,6 +63,11 @@ fun PredictiveBackContainer(
         }
     }
     val outline = MaterialTheme.colorScheme.outline
+    val view = LocalView.current
+    val pageShape = remember(view) {
+        val radius = ConcentricCorners.displayCorners(view).maxOfOrNull { it?.radius ?: 0f } ?: 0f
+        if (radius > 0f) RoundedCornerShape(radius) else RectangleShape
+    }
     // Swallows touches that the content does not use, so nothing underneath reacts to them.
     Box(modifier.fillMaxSize().pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {
         // Dim what is revealed underneath (only while the gesture runs).
@@ -78,6 +85,7 @@ fun PredictiveBackContainer(
                         scaleY = scale
                         val direction = if (edge[0] == BackEventCompat.EDGE_RIGHT) -1f else 1f
                         translationX = direction * BackGesture.shift(p) * size.width
+                        shape = pageShape
                         clip = true
                     }
                     BackStyle.SHEET -> {
@@ -87,7 +95,7 @@ fun PredictiveBackContainer(
                 }
             }.then(
                 // The shrinking page gets a hard edge, like a card lifted off the stack.
-                if (style == BackStyle.PAGE && progress.value > 0f) Modifier.border(2.dp, outline, RectangleShape) else Modifier,
+                if (style == BackStyle.PAGE && progress.value > 0f) Modifier.border(2.dp, outline, pageShape) else Modifier,
             ),
         ) { content() }
     }

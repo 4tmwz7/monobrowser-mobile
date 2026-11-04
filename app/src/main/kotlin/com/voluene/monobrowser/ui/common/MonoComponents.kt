@@ -1,5 +1,6 @@
 package com.voluene.monobrowser.ui.common
 
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
@@ -57,8 +58,10 @@ fun MonoButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier
     val scheme = MaterialTheme.colorScheme
     val bg = if (inverted) scheme.onBackground else scheme.background
     val fg = if (inverted) scheme.background else scheme.onBackground
+    // Square, except where it reaches into a rounded screen corner (bottom buttons of full-screen pages).
+    val corners = rememberScreenAwareShape()
     Box(
-        modifier.background(bg).border(1.dp, scheme.outline, RectangleShape)
+        modifier.then(corners.modifier).clip(corners.shape).background(bg, corners.shape).border(1.dp, scheme.outline, corners.shape)
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = horizontalPadding, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) { Text(label, color = fg.copy(alpha = if (enabled) 1f else 0.4f), fontWeight = FontWeight.Medium, fontSize = 14.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip) }
