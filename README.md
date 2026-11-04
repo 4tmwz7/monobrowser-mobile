@@ -61,3 +61,10 @@ Look
 ## Status
 
 Phases 1-4 are implemented (browsing core, settings, ad blocker, bookmarks, palette, Glance, workspaces, notes). Not implemented yet: `blob:` downloads, certificate exceptions, a custom theme editor, persisted site-permission decisions. Everything was developed without a connected phone, so on-device testing is still pending.
+
+## License
+
+Apache License 2.0 (see [LICENSE](LICENSE)). You may use, modify and redistribute the code, also commercially,
+as long as you keep the copyright and the [NOTICE](NOTICE) file and credit the original project in your
+documentation and in your app's credits / licences screen. Third-party components keep their own licences
+([THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).
