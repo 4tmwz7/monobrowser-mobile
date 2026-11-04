@@ -19,4 +19,10 @@ interface ActivityHost {
 
     /** System "create document" picker; [onResult] gets the new document's Uri or null when cancelled. */
     fun createDocument(suggestedName: String, mimeType: String, onResult: (Uri?) -> Unit)
+
+    /**
+     * Copies the window area [source] (window coordinates) into [target] (scaled to its size), asynchronously from the
+     * GPU (PixelCopy): nothing is redrawn on the main thread. [onResult] runs on the main thread, false on failure.
+     */
+    fun copyFromScreen(source: android.graphics.Rect, target: android.graphics.Bitmap, onResult: (Boolean) -> Unit)
 }

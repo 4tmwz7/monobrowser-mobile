@@ -149,7 +149,8 @@ fun BrowserScreen(manager: TabManager) {
     // Update checks begin once the first frame is on screen (non-blocking, release builds only).
     LaunchedEffect(manager) { manager.updater.start(manager.settings) }
     // The tab grid shows the current page as it is right now.
-    LaunchedEffect(overlay) { if (overlay == Overlay.Tabs) manager.captureThumbnail(activeId) }
+    // Full-screen overlays hide the page: no thumbnails are copied from the screen meanwhile.
+    LaunchedEffect(overlay) { manager.overlayOpen = overlay != Overlay.None }
 
     // System back, lowest to highest priority: page history, find bar, full-screen overlays.
     // Page history, then (a link opened in a new tab) close it and return to the source tab; otherwise back leaves
@@ -237,7 +238,8 @@ fun BrowserScreen(manager: TabManager) {
         overlay = Overlay.Notes
     }
 
-    val menuTiles = listOf(
+    // Built only while the menu / palette is open (not on every progress tick of the page).
+    val menuTiles: @Composable () -> List<MenuTile> = { listOf(
         MenuTile(R.string.tab_new, Icons.Filled.Add) { manager.openNewTab() },
         MenuTile(R.string.menu_new_private_short, Icons.Filled.Lock) { manager.openNewTab(isPrivate = true) },
         MenuTile(R.string.menu_bookmarks, MenuIcons.Bookmark) { overlay = Overlay.Bookmarks },
@@ -257,17 +259,17 @@ fun BrowserScreen(manager: TabManager) {
         MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() },
         MenuTile(R.string.menu_print, MenuIcons.Print, enabled = isWeb && !tab.isLoading) { printPage() },
         MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
-    )
-    val menuInfo = when {
+    ) }
+    val menuInfo: @Composable () -> MenuInfo? = { when {
         !isWeb -> null
         !settings.adblockEnabled -> MenuInfo(stringResource(R.string.menu_adblock_header_off))
         siteExcepted -> MenuInfo(stringResource(R.string.menu_adblock_header_site_off), stringResource(R.string.menu_adblock_toggle_on)) { manager.toggleAdblockForSite(tab.id) }
         else -> MenuInfo(stringResource(R.string.menu_adblock_header, tab.blockedCount), stringResource(R.string.menu_adblock_toggle_off)) { manager.toggleAdblockForSite(tab.id) }
-    }
+    } }
 
-    val labelNewTab = stringResource(R.string.tab_new)
+    val paletteActions: @Composable () -> List<PaletteAction> = { val labelNewTab = stringResource(R.string.tab_new)
     val labelNewPrivate = stringResource(R.string.tab_new_private)
-    val paletteActions = buildList {
+    buildList {
         add(PaletteAction(PaletteActionId.NEW_TAB, labelNewTab, "nowa karta new tab open"))
         add(PaletteAction(PaletteActionId.NEW_PRIVATE_TAB, labelNewPrivate, "prywatna incognito private nowa karta"))
         add(PaletteAction(PaletteActionId.OPEN_SETTINGS, stringResource(R.string.palette_open_settings), "ustawienia settings preferences opcje"))
@@ -328,7 +330,7 @@ fun BrowserScreen(manager: TabManager) {
                 arg = target.id,
             ))
         }
-    }
+    } }
 
     fun runAction(action: PaletteAction) {
         when (action.id) {
@@ -408,7 +410,8 @@ fun BrowserScreen(manager: TabManager) {
                         onForward = { manager.goForward(tab.id) },
                         onReloadOrStop = { if (tab.isLoading) manager.stop(tab.id) else manager.reload(tab.id) },
                         onMenu = { overlay = Overlay.Menu },
-                        onTabs = { overlay = Overlay.Tabs },
+                        // Copy the page as it is right now (one GPU frame), then show the grid.
+                        onTabs = { manager.captureThumbnail(tab.id) { overlay = Overlay.Tabs } },
                         onNewTab = { manager.openNewTab() },
                         onSwipeTab = manager::switchRelative,
                     )
@@ -484,7 +487,7 @@ fun BrowserScreen(manager: TabManager) {
         ) {
         when (shown) {
             Overlay.None -> Unit
-            Overlay.Menu -> BrowserMenuGrid(menuTiles, menuInfo, onDismiss = { overlay = Overlay.None })
+            Overlay.Menu -> BrowserMenuGrid(menuTiles(), menuInfo(), onDismiss = { overlay = Overlay.None })
             Overlay.Tabs -> TabSwitcher(
                 tabs = workspaceTabs,
                 activeId = activeId,
@@ -569,11 +572,12 @@ fun BrowserScreen(manager: TabManager) {
                     initialText = initial,
                     toolbarTop = toolbarTop,
                     // Tabs of every workspace; the current one first, the others marked with their workspace name.
-                    tabs = tabs.sortedBy { it.workspaceId != currentWorkspaceId }.map {
+                    // Same instances while their content is unchanged: the palette keeps its search index between keystrokes.
+                    tabs = rememberEqual(tabs.sortedBy { it.workspaceId != currentWorkspaceId }.map {
                         PaletteTab(it.id, it.title, it.url, it.isPrivate, if (workspaces.size > 1) workspaceNames[it.workspaceId].orEmpty() else "")
-                    },
-                    bookmarks = bookmarks.bookmarks.asReversed().map { PaletteLink(it.title, it.url) },
-                    actions = paletteActions,
+                    }),
+                    bookmarks = remember(bookmarks) { bookmarks.bookmarks.asReversed().map { PaletteLink(it.title, it.url) } },
+                    actions = paletteActions(),
                     historyLookup = { q -> manager.paletteHistory(q).map { PaletteLink(it.title, it.url) } },
                     suggestionLookup = if (settings.searchSuggestions && !tab.isPrivate) {
                         { q -> withContext(Dispatchers.IO) { SearchSuggestions.fetch(settings.searchEngine, q, java.util.Locale.getDefault().language) } }
@@ -679,6 +683,15 @@ fun BrowserScreen(manager: TabManager) {
             )
         }
     }
+}
+
+/** [value], but the previous instance as long as it is equal (lets callers cache by identity). */
+@Composable
+private fun <T> rememberEqual(value: T): T {
+    val holder = remember { arrayOfNulls<Any?>(1) }
+    if (holder[0] != value) holder[0] = value
+    @Suppress("UNCHECKED_CAST")
+    return holder[0] as T
 }
 
 @androidx.annotation.StringRes

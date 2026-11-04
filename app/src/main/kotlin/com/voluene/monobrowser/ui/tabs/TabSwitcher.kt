@@ -285,10 +285,11 @@ fun TabSwitcher(
 
 private const val UNDO_MS = 4_000L
 private const val FILTER_MIN_TABS = 6
+private val WORD_BREAK = Regex("\\s+")
 
 /** Tab list filter: every word of [query] must appear in the title or the URL (accents ignored). */
 internal fun tabMatches(tab: Tab, query: String): Boolean {
-    val words = PaletteEngine.fold(query).split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val words = PaletteEngine.fold(query).split(WORD_BREAK).filter { it.isNotEmpty() }
     if (words.isEmpty()) return true
     val haystack = PaletteEngine.fold("${tab.title} ${tab.url}")
     return words.all { haystack.contains(it) }

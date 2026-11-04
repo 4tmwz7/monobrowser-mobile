@@ -135,4 +135,10 @@ class PaletteEngineTest {
         val url = PaletteEngine.search("example.com", emptyList(), emptyList(), emptyList(), emptyList(), listOf("example.com login"))
         assertTrue(url.none { it is PaletteResult.Suggestion })
     }
+
+    @Test fun hostFirstMatchesShortUrlLabel() {
+        for (url in listOf("https://www.Example.com/a/", "http://example.com", "https://sub.example.com/x?y=1", "example.com/", "ftp://www.a.b/")) {
+            assertEquals(com.voluene.monobrowser.util.UrlUtils.shortUrlLabel(url), PaletteEngine.hostFirst(url))
+        }
+    }
 }

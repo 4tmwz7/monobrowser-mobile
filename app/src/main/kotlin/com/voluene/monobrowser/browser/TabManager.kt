@@ -69,7 +69,6 @@ import com.voluene.monobrowser.download.DownloadRepository
 import android.webkit.JavascriptInterface
 import java.util.UUID
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voluene.monobrowser.adblock.Adblock
@@ -176,20 +175,35 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     val thumbnails: StateFlow<Map<Long, ImageBitmap>> = _thumbnails.asStateFlow()
 
     /** Draws the tab's visible page into a small bitmap for the tab grid. Blank pages and hidden views are skipped. */
-    fun captureThumbnail(id: Long) {
-        val webView = webViews[id] ?: return
-        val tab = _tabs.value.firstOrNull { it.id == id } ?: return
-        if (webView.width <= 0 || webView.height <= 0 || webView.parent == null || !UrlUtils.isHttpUrl(tab.url)) return
-        val bitmap = runCatching {
-            val scale = THUMBNAIL_WIDTH.toFloat() / webView.width
-            val height = (webView.height * scale).toInt().coerceIn(1, (THUMBNAIL_WIDTH * 1.6f).toInt())
-            Bitmap.createBitmap(THUMBNAIL_WIDTH, height, Bitmap.Config.RGB_565).also { bitmap ->
-                val canvas = Canvas(bitmap)
-                canvas.scale(scale, scale)
-                canvas.translate(-webView.scrollX.toFloat(), -webView.scrollY.toFloat())
-                webView.draw(canvas)
-            }
-        }.getOrNull() ?: return
+    /**
+     * Copies the tab's page as it is on screen (GPU copy, nothing redrawn on the main thread) and then runs [then]
+     * (always, also when there was nothing to copy). Only a page that is actually visible can be copied; while a
+     * full-screen overlay covers it, the copy is skipped.
+     */
+    fun captureThumbnail(id: Long, then: () -> Unit = {}) {
+        val webView = webViews[id]
+        val tab = _tabs.value.firstOrNull { it.id == id }
+        val activityHost = host
+        if (webView == null || tab == null || activityHost == null || overlayOpen || !webView.isShown ||
+            webView.width <= 0 || webView.height <= 0 || !UrlUtils.isHttpUrl(tab.url)
+        ) return then()
+        val height = (webView.height * THUMBNAIL_WIDTH.toFloat() / webView.width).toInt().coerceIn(1, (THUMBNAIL_WIDTH * 1.6f).toInt())
+        // The top part of the page (the bitmap is shorter than the view when the view is very tall).
+        val visibleHeight = (height * webView.width.toFloat() / THUMBNAIL_WIDTH).toInt().coerceAtMost(webView.height)
+        val bitmap = runCatching { Bitmap.createBitmap(THUMBNAIL_WIDTH, height, Bitmap.Config.ARGB_8888) }.getOrNull() ?: return then()
+        val location = IntArray(2).also(webView::getLocationInWindow)
+        val source = android.graphics.Rect(location[0], location[1], location[0] + webView.width, location[1] + visibleHeight)
+        activityHost.copyFromScreen(source, bitmap) { ok ->
+            if (ok) storeThumbnail(id, bitmap)
+            then()
+        }
+    }
+
+    /** Set by the UI: a full-screen overlay covers the page, so it cannot be copied from the screen. */
+    @Volatile var overlayOpen: Boolean = false
+
+    private fun storeThumbnail(id: Long, bitmap: Bitmap) {
+        if (_tabs.value.none { it.id == id }) return
         _thumbnails.update { old ->
             // Re-inserting moves the tab to the end: the oldest previews are dropped first.
             val next = LinkedHashMap(old)
@@ -414,6 +428,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         }
         cancelDialogsOf(id)
         _thumbnails.update { it - id }
+        pendingBlocked.remove(id)
         webViews.remove(id)?.let { destroy(it, closing.isPrivate) }
         lastUsed.remove(id)
         errorUrls.remove(id)
@@ -489,14 +504,15 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         if (_activeTabId.value != id) {
             closeFind()
             exitFullScreen()
-            captureThumbnail(_activeTabId.value) // the tab being left, as it looks now
+            captureThumbnail(_activeTabId.value) // the tab being left, as it looks now (skipped under an overlay)
+            webViews[_activeTabId.value]?.let(::pauseIfSilent)
         }
         _activeTabId.value = id
         _currentWorkspaceId.value = tab.workspaceId
         activeByWorkspace[tab.workspaceId] = id
         lastUsed[id] = SystemClock.elapsedRealtime()
         if (!tab.isPrivate) lastNormalActive = id
-        ensureLive(id)
+        ensureLive(id)?.onResume()
         enforceSleepPolicy()
         showBar()
         schedulePersist()
@@ -687,6 +703,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         }
         if (tab.desktopMode) applyDesktopMode(webView, true)
         applyDarkening(webView)
+        // Renderers of tabs that are not on screen get a lower priority (the system may reclaim them first).
+        webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
         pageBackground?.let(webView::setBackgroundColor)
         webView.webViewClient = MonoWebViewClient(tab.id, adBlocker, this, this)
         adBlocker.attach(webView) // adblock: cosmetic
@@ -756,6 +774,54 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         history.close()
     }
 
+    // --- Background work: pause what nobody sees, unless it is playing sound or video ---
+
+    private val mediaPlayingScript =
+        "(function(){var m=document.querySelectorAll('video,audio');for(var i=0;i<m.length;i++){if(!m[i].paused&&!m[i].ended&&!m[i].muted)return true}return false})()"
+
+    /** [onResult] is true when the page plays audible media (a tab playing music must keep playing). */
+    private fun isPlayingMedia(webView: WebView, onResult: (Boolean) -> Unit) {
+        runCatching { webView.evaluateJavascript(mediaPlayingScript) { onResult(it == "true") } }.onFailure { onResult(false) }
+    }
+
+    /** A tab that left the screen stops animations and plugins (WebView.onPause) unless it plays media. */
+    private fun pauseIfSilent(webView: WebView) {
+        isPlayingMedia(webView) { playing ->
+            val stillHidden = webViews[_activeTabId.value] !== webView
+            if (!playing && stillHidden && webViews.containsValue(webView)) webView.onPause()
+        }
+    }
+
+    private var appVisible = true
+
+    /**
+     * The app went to the background (or came back). In the background JavaScript timers of all tabs are paused
+     * (WebView.pauseTimers is process-wide) unless some tab plays media, and the visible tab is paused too.
+     */
+    fun onAppVisible(visible: Boolean) {
+        if (visible == appVisible) return
+        appVisible = visible
+        val active = webViews[_activeTabId.value]
+        if (visible) {
+            webViews.values.firstOrNull()?.resumeTimers()
+            active?.onResume()
+            return
+        }
+        val live = webViews.values.toList()
+        if (live.isEmpty()) return
+        var pending = live.size
+        var anyPlaying = false
+        live.forEach { webView ->
+            isPlayingMedia(webView) { playing ->
+                anyPlaying = anyPlaying || playing
+                if (--pending == 0 && !appVisible && !anyPlaying) {
+                    active?.onPause()
+                    webViews.values.firstOrNull()?.pauseTimers()
+                }
+            }
+        }
+    }
+
     // --- Persistence ---
 
     private fun snapshot(): SessionData {
@@ -809,6 +875,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     override fun onPageStarted(tabId: Long, url: String) {
         if (errorUrls[tabId] != url) errorUrls.remove(tabId)
+        pendingBlocked[tabId]?.set(0) // counts of the previous page
         val keepTitle = errorUrls[tabId] == url
         update(tabId) { it.copy(url = url, title = if (keepTitle) it.title else "", blockedCount = 0, progress = 0) }
         if (tabId == _activeTabId.value) showBar()
@@ -840,7 +907,25 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     override fun onProgress(tabId: Long, progress: Int) = update(tabId) { it.copy(progress = progress) }
 
-    override fun onBlocked(tabId: Long) = update(tabId) { it.copy(blockedCount = it.blockedCount + 1) }
+    // Blocked requests are reported from network threads, often hundreds per page: count them atomically and
+    // publish the totals at most every BLOCKED_FLUSH_MS, on the main thread (no list copy per request, no races).
+    private val pendingBlocked = java.util.concurrent.ConcurrentHashMap<Long, java.util.concurrent.atomic.AtomicInteger>()
+    private val blockedFlushQueued = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    override fun onBlocked(tabId: Long) {
+        pendingBlocked.getOrPut(tabId) { java.util.concurrent.atomic.AtomicInteger() }.incrementAndGet()
+        if (blockedFlushQueued.compareAndSet(false, true)) mainHandler.postDelayed(::flushBlocked, BLOCKED_FLUSH_MS)
+    }
+
+    private fun flushBlocked() {
+        blockedFlushQueued.set(false)
+        val added = HashMap<Long, Int>()
+        pendingBlocked.forEach { (id, counter) -> counter.getAndSet(0).takeIf { it > 0 }?.let { added[id] = it } }
+        if (added.isEmpty()) return
+        _tabs.update { list -> list.map { t -> added[t.id]?.let { t.copy(blockedCount = t.blockedCount + it) } ?: t } }
+        _glance.update { g -> g?.let { added[it.id]?.let { n -> it.copy(blockedCount = it.blockedCount + n) } ?: it } }
+    }
 
     override fun onScrolled(tabId: Long, dy: Int, scrollY: Int) {
         if (tabId != _activeTabId.value) return
@@ -1457,7 +1542,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         const val PRIVATE_PROFILE = "private"
         const val PERSIST_DELAY_MS = 1_000L
         const val TOP_SITES_WINDOW_MS = 90L * 24 * 60 * 60 * 1000
-        const val THUMBNAIL_WIDTH = 360
+        const val THUMBNAIL_WIDTH = 300
+        const val BLOCKED_FLUSH_MS = 250L
         const val MAX_THUMBNAILS = 30
     }
 }

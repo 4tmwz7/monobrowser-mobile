@@ -96,6 +96,18 @@ class MainActivity : ComponentActivity(), ActivityHost {
         handleIntent(intent)
     }
 
+    override fun copyFromScreen(source: android.graphics.Rect, target: android.graphics.Bitmap, onResult: (Boolean) -> Unit) {
+        if (source.isEmpty) return onResult(false)
+        runCatching {
+            android.view.PixelCopy.request(window, source, target, { result -> onResult(result == android.view.PixelCopy.SUCCESS) }, android.os.Handler(mainLooper))
+        }.onFailure { onResult(false) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        tabManager.onAppVisible(true)
+    }
+
     override fun onResume() {
         super.onResume()
         tabManager.updater.onAppResumed() // back from "Install unknown apps" settings -> continue the update
@@ -103,6 +115,7 @@ class MainActivity : ComponentActivity(), ActivityHost {
 
     override fun onStop() {
         super.onStop()
+        tabManager.onAppVisible(false)
         tabManager.flush() // the process may be killed while in the background
     }
 
