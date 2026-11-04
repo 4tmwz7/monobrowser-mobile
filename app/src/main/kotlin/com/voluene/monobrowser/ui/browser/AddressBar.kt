@@ -119,6 +119,8 @@ fun AddressBar(
     fullAddress: Boolean = false,
     /** Live load percentage (0..100), read while drawing. */
     loadProgress: () -> Int = { tab.progress },
+    /** Shown when the page is an article: opens reader view. */
+    onReader: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val bg = if (tab.isPrivate) scheme.onBackground else scheme.background
@@ -208,6 +210,14 @@ fun AddressBar(
                         fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                }
+                if (onReader != null && tab.readerAvailable && !tab.isLoading) {
+                    val readerLabel = stringResource(R.string.menu_reader)
+                    Box(
+                        Modifier.padding(start = 4.dp).size(28.dp).clickable(onClickLabel = readerLabel, onClick = onReader)
+                            .semantics { contentDescription = readerLabel },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(MenuIcons.Article, contentDescription = null, tint = fg, modifier = Modifier.size(17.dp)) }
                 }
                 if (tab.blockedCount > 0) {
                     // Blocked-requests counter of this page.

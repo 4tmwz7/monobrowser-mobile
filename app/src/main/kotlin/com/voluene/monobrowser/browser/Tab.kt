@@ -25,6 +25,8 @@ data class Tab(
     val desktopMode: Boolean = false,
     /** The tab a link was opened from: back on a tab without history closes it and returns there. */
     val openerId: Long? = null,
+    /** The loaded page looks like an article (reader view is offered in the address bar). */
+    val readerAvailable: Boolean = false,
 ) {
     val isLoading: Boolean get() = progress in 0..99
 }

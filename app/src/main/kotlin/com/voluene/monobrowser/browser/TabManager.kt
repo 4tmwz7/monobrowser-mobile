@@ -905,12 +905,13 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         pendingBlocked[tabId]?.set(0) // counts of the previous page
         val keepTitle = errorUrls[tabId] == url
         _loadProgress.update { it + (tabId to 0) }
-        update(tabId) { it.copy(url = url, title = if (keepTitle) it.title else "", blockedCount = 0, progress = 0) }
+        update(tabId) { it.copy(url = url, title = if (keepTitle) it.title else "", blockedCount = 0, progress = 0, readerAvailable = false) }
         if (tabId == _activeTabId.value) showBar()
     }
 
     override fun onPageFinished(tabId: Long, url: String) {
         update(tabId) { it.copy(url = url, progress = 100) }
+        probeReader(tabId, url)
         val tab = tab(tabId)
         if (tab != null && !tab.isPrivate && tabId != _glance.value?.id && UrlUtils.isHttpUrl(url) && tabId !in errorUrls) {
             val title = tab.title
@@ -1297,6 +1298,18 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         val url = errorUrls[tabId] ?: tab.url
         if (!UrlUtils.isHttpUrl(url)) return
         navigate(tabId, TranslateUrl.of(url, Locale.getDefault().language))
+    }
+
+    /** Asks the page whether it is an article (a few microseconds of JS); the address bar then offers reader view. */
+    private fun probeReader(tabId: Long, url: String) {
+        if (!UrlUtils.isHttpUrl(url) || tabId in errorUrls) return
+        val webView = webViews[tabId] ?: return
+        runCatching {
+            webView.evaluateJavascript(Reader.PROBE_SCRIPT) { result ->
+                val available = result == "true"
+                if (tab(tabId)?.let { it.url == url && it.readerAvailable != available } == true) update(tabId) { it.copy(readerAvailable = available) }
+            }
+        }
     }
 
     // --- Notes ---

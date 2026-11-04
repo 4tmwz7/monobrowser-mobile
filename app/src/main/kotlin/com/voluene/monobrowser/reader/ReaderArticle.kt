@@ -108,6 +108,14 @@ object Reader {
         )
     }
 
+    /**
+     * Cheap check run after every page load: enough paragraph text for reader view to be worth offering
+     * (same threshold idea as [MIN_TEXT], a little stricter to avoid offering it on index pages).
+     */
+    const val PROBE_SCRIPT: String =
+        "(function(){var n=0,c=0,ps=document.getElementsByTagName('p');for(var i=0;i<ps.length&&i<400;i++){" +
+            "var l=(ps[i].textContent||'').length;if(l>=80){n+=l;c++}}return c>=3&&n>=1200})()"
+
     /** Extraction script; evaluates to a JSON string (see [parse]). */
     val SCRIPT: String = """
         (function () {

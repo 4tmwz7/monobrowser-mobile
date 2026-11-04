@@ -411,6 +411,7 @@ fun BrowserScreen(manager: TabManager) {
                         onHistory = { forward -> historySteps = manager.navigationHistory(tab.id, forward).takeIf { it.isNotEmpty() } },
                         fullAddress = settings.showFullAddress,
                         loadProgress = { loadProgress.value[tab.id] ?: tab.progress },
+                        onReader = ::openReader,
                         onBack = { manager.goBack(tab.id) },
                         onForward = { manager.goForward(tab.id) },
                         onReloadOrStop = { if (tab.isLoading) manager.stop(tab.id) else manager.reload(tab.id) },

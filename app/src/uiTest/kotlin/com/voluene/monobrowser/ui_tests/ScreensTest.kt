@@ -234,6 +234,17 @@ class ScreensTest {
         }
     }
 
+    @Test fun barReader() = shot("bar_reader") {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth())
+            AddressBar(
+                tab = Tab(1, url = "https://martinfowler.com/articles/microservices.html", readerAvailable = true, blockedCount = 4), tabCount = 3,
+                toolbarTop = false, onOpenPalette = {}, onAddressLongPress = {}, onSiteInfo = {}, onHistory = {}, onBack = {}, onForward = {},
+                onReloadOrStop = {}, onMenu = {}, onTabs = {}, onNewTab = {}, onSwipeTab = {}, onReader = {},
+            )
+        }
+    }
+
     @Test fun barInsecure() = shot("bar_insecure") { browser(Tab(1, url = "http://neverssl.com/online/")) { Box(Modifier.fillMaxSize()) } }
 
     /** A coloured fake page: header bar, text lines, an image block. */
