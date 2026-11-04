@@ -85,6 +85,15 @@ class HistoryDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
             buildList { while (c.moveToNext()) add(VisitCount(c.getString(0), c.getString(1).orEmpty(), c.getInt(2), c.getLong(3))) }
         }
 
+    /** The most recently visited pages, one entry per URL, newest first. */
+    fun recent(limit: Int = 5): List<HistoryEntry> =
+        readableDatabase.rawQuery(
+            "SELECT MAX(_id), url, title, MAX(visited_at) AS t FROM history GROUP BY url ORDER BY t DESC LIMIT $limit",
+            null,
+        ).use { c ->
+            buildList { while (c.moveToNext()) add(HistoryEntry(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3))) }
+        }
+
     fun delete(id: Long) {
         writableDatabase.delete("history", "_id = ?", arrayOf(id.toString()))
     }

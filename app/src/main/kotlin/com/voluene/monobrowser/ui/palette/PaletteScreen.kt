@@ -86,8 +86,7 @@ fun PaletteScreen(
 
     LaunchedEffect(Unit) { focus.requestFocus() }
     LaunchedEffect(query) {
-        if (query.isBlank()) { history = emptyList(); return@LaunchedEffect }
-        delay(80) // debounce typing
+        if (query.isNotBlank()) delay(80) // debounce typing (an empty field asks for recent pages right away)
         history = withContext(Dispatchers.IO) { historyLookup(query.trim()) }
     }
 

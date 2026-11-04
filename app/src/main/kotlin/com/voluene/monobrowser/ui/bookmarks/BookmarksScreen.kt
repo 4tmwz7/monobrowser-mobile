@@ -149,7 +149,8 @@ fun BookmarksScreen(
             }
             items(items, key = { "b${it.id}" }) { b ->
                 Row(Modifier.fillMaxWidth().clickable { onOpen(b.url, false) }.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+                    com.voluene.monobrowser.ui.common.SiteMonogram(b.url)
+                    Column(Modifier.weight(1f).padding(start = 12.dp, top = 10.dp, bottom = 10.dp)) {
                         Text(b.title.ifBlank { UrlUtils.shortUrlLabel(b.url) }, color = scheme.onBackground, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(UrlUtils.shortUrlLabel(b.url), color = scheme.onBackground.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }

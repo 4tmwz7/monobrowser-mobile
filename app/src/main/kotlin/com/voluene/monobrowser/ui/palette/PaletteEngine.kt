@@ -62,6 +62,7 @@ object PaletteEngine {
     const val MAX_HISTORY = 5
     const val MAX_ACTIONS = 8
     const val MAX_SUGGESTIONS = 4
+    const val MAX_RECENT = 4
 
     /** Lower case without diacritics; letters that do not decompose (Polish ł, ø, đ, ß ...) are mapped by hand. */
     fun fold(value: String): String =
@@ -158,9 +159,8 @@ object PaletteEngine {
             .filter { seen.add(it.url) }.take(MAX_BOOKMARKS)
         bookmarkHits.forEach { out.add(PaletteResult.Bookmark(it)) }
 
-        if (words.isNotEmpty()) {
-            history.filter { seen.add(it.url) }.take(MAX_HISTORY).forEach { out.add(PaletteResult.History(it)) }
-        }
+        // With a query: matches; without one, the caller passes the most recent pages ("pick up where you left off").
+        history.filter { seen.add(it.url) }.take(if (words.isEmpty()) MAX_RECENT else MAX_HISTORY).forEach { out.add(PaletteResult.History(it)) }
         filterActions(actions, query).forEach { out.add(PaletteResult.Run(it)) }
         return out
     }

@@ -34,12 +34,15 @@ class PaletteEngineTest {
         assertTrue((search("https://a.com/x").first() as PaletteResult.Go).let { !it.isSearch })
     }
 
-    @Test fun emptyQueryHasNoGoRowAndListsTabsAndActions() {
+    @Test fun emptyQueryHasNoGoRowAndListsTabsRecentPagesAndActions() {
         val r = search("")
         assertTrue(r.none { it is PaletteResult.Go })
         assertEquals(2, r.count { it is PaletteResult.OpenTab })
         assertTrue(r.any { it is PaletteResult.Run })
-        assertTrue(r.none { it is PaletteResult.History })
+        // The caller passes the most recent pages for an empty query; at most MAX_RECENT are shown.
+        val recent = (1..10).map { PaletteLink("Page $it", "https://p$it.com/") }
+        val empty = PaletteEngine.search("", emptyList(), emptyList(), recent, emptyList())
+        assertEquals(recent.take(PaletteEngine.MAX_RECENT), empty.filterIsInstance<PaletteResult.History>().map { it.link })
     }
 
     @Test fun groupsAreOrderedGoTabsBookmarksHistoryActions() {

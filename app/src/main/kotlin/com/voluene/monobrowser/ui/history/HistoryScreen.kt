@@ -157,13 +157,16 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit, onDelete: () ->
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(time, color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.padding(end = 12.dp))
-        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+        com.voluene.monobrowser.ui.common.SiteMonogram(entry.url)
+        Column(Modifier.weight(1f).padding(start = 12.dp, top = 10.dp, bottom = 10.dp)) {
             Text(
                 entry.title.ifBlank { UrlUtils.shortUrlLabel(entry.url) },
                 color = scheme.onBackground, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Text(UrlUtils.shortUrlLabel(entry.url), color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "$time  \u00b7  ${UrlUtils.shortUrlLabel(entry.url)}", color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 12.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
         IconButton(onClick = onDelete) {
             Icon(Icons.Default.Close, stringResource(R.string.history_delete), tint = scheme.onBackground)

@@ -802,7 +802,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     /** History matches for the palette (blocking IO: call from a background dispatcher). */
     fun paletteHistory(query: String): List<HistoryEntry> =
-        runCatching { history.suggest(query, limit = 8) }.getOrDefault(emptyList())
+        runCatching { if (query.isBlank()) history.recent(limit = 8) else history.suggest(query, limit = 8) }.getOrDefault(emptyList())
 
     /** Colour shown while a page has not painted yet (matches the theme). */
     fun setPageBackground(argb: Int) {
