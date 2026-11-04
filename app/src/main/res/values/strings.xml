@@ -446,4 +446,5 @@
     <string name="reader_speed">Reading speed</string>
     <string name="menu_translate">Translate page</string>
     <string name="translate_page">Translate page</string>
+    <string name="settings_search">Search settings</string>
 </resources>

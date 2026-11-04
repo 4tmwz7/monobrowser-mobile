@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.voluene.monobrowser.browser.TabManager
 import com.voluene.monobrowser.ui.browser.BrowserScreen
@@ -75,6 +76,21 @@ class AppSmokeTest {
         compose.onNodeWithText("Search or enter address", useUnmergedTree = true).let { }
         compose.onAllNodesWithText("Search or enter address")[0].performClick()
         save("tour_palette")
+    }
+
+    @Test fun settingsSearch() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        lateinit var manager: TabManager
+        compose.runOnUiThread { manager = TabManager(app); manager.updateSettings { it.copy(onboardingDone = true) } }
+        compose.setContent { MonoTheme { BrowserScreen(manager) } }
+        compose.onNodeWithContentDescription("Menu").performClick()
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithText("Settings").performClick()
+        compose.waitForIdle(); compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithText("Search settings").performTextInput("dark")
+        save("settings_search")
+        compose.onNodeWithText("Dark mode for websites").assertExists()
+        org.junit.Assert.assertTrue(compose.onAllNodesWithText("Search engine").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun readingList() {

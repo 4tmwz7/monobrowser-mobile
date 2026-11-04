@@ -446,4 +446,5 @@
     <string name="reader_speed">Prędkość czytania</string>
     <string name="menu_translate">Przetłumacz stronę</string>
     <string name="translate_page">Przetłumacz stronę</string>
+    <string name="settings_search">Szukaj w ustawieniach</string>
 </resources>

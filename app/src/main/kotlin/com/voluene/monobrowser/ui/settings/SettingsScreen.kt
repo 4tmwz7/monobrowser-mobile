@@ -69,6 +69,16 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
+/** Text typed in the settings search field: rows whose title / description do not match hide themselves. */
+private val LocalSettingsQuery = androidx.compose.runtime.compositionLocalOf { "" }
+
+/** Every word of [query] must appear in the title or description (case and accents ignored). Pure. */
+internal fun settingMatches(query: String, title: String, subtitle: String?): Boolean {
+    if (query.isBlank()) return true
+    val haystack = com.voluene.monobrowser.ui.palette.PaletteEngine.fold("$title ${subtitle.orEmpty()}")
+    return com.voluene.monobrowser.ui.palette.PaletteEngine.fold(query).split(' ').filter { it.isNotBlank() }.all { haystack.contains(it) }
+}
+
 private enum class Page { Main, Theme, Exceptions, Permissions, Licenses }
 
 private const val WEBSITE = "https://monobrowser.vercel.app"
@@ -97,6 +107,7 @@ fun SettingsScreen(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: ()
 
 @Composable
 private fun Section(title: String) {
+    if (LocalSettingsQuery.current.isNotBlank()) return // results are a flat list
     val scheme = MaterialTheme.colorScheme
     Text(
         title.uppercase(), color = scheme.onBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
@@ -106,6 +117,7 @@ private fun Section(title: String) {
 
 @Composable
 private fun SettingRow(title: String, subtitle: String? = null, enabled: Boolean = true, onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
+    if (!settingMatches(LocalSettingsQuery.current, title, subtitle)) return
     val scheme = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
@@ -166,7 +178,13 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
         WebDarkMode.OFF to stringResource(R.string.settings_web_dark_off),
     )
 
+    var query by remember { mutableStateOf("") }
     ScreenScaffold(stringResource(R.string.settings_title), onClose) {
+        com.voluene.monobrowser.ui.common.MonoTextField(
+            query, { query = it }, stringResource(R.string.settings_search),
+            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        androidx.compose.runtime.CompositionLocalProvider(LocalSettingsQuery provides query) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
             Section(stringResource(R.string.settings_section_general))
             SettingRow(stringResource(R.string.settings_search_engine), engineNames[settings.searchEngine], onClick = { dialog = "engine" })
@@ -235,6 +253,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             if (manager.updater.enabled) UpdateRows(manager, settings.autoUpdateCheck, onOpenUrl, onAutoChange = { v -> update { it.copy(autoUpdateCheck = v) } })
             SettingRow(stringResource(R.string.about_licenses), stringResource(R.string.about_licenses_hint), onClick = { open(Page.Licenses) })
             SettingRow(stringResource(R.string.about_website), WEBSITE.removePrefix("https://"), onClick = { onOpenUrl(WEBSITE) })
+        }
         }
     }
 
