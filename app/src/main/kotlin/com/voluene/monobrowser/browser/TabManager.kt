@@ -42,6 +42,7 @@ import com.voluene.monobrowser.settings.SettingsCodec
 import com.voluene.monobrowser.settings.StartupMode
 import com.voluene.monobrowser.settings.Themes
 import com.voluene.monobrowser.settings.WebDarkMode
+import com.voluene.monobrowser.settings.PinnedSite
 import android.view.ContextThemeWrapper
 import androidx.webkit.WebSettingsCompat
 import com.voluene.monobrowser.util.StateFile
@@ -199,6 +200,43 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         }
     }
 
+    // --- In-app messages (a bar above the toolbar with an optional action; replaces toasts where an action helps) ---
+
+    data class UiMessage(val id: Long, val text: String, val actionLabel: String? = null, val action: (() -> Unit)? = null)
+
+    private var nextMessageId = 1L
+    private val _message = MutableStateFlow<UiMessage?>(null)
+    val message: StateFlow<UiMessage?> = _message.asStateFlow()
+
+    fun showMessage(text: String, actionLabel: String? = null, action: (() -> Unit)? = null) {
+        _message.value = UiMessage(nextMessageId++, text, actionLabel, action)
+    }
+
+    fun dismissMessage(id: Long) {
+        _message.update { if (it?.id == id) null else it }
+    }
+
+    private fun str(@StringRes res: Int, vararg args: Any) = getApplication<Application>().getString(res, *args)
+
+    /** Finished downloads started by this app: "Downloaded x · Open". */
+    private val downloadReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+            val id = intent.getLongExtra(android.app.DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+            if (id < 0) return
+            viewModelScope.launch {
+                val item = withContext(Dispatchers.IO) { runCatching { downloads.items().firstOrNull { it.id == id } }.getOrNull() } ?: return@launch
+                when (item.status) {
+                    com.voluene.monobrowser.download.DownloadStatus.DONE -> showMessage(str(R.string.download_complete, item.title), str(R.string.message_open)) {
+                        val open = downloads.openIntent(id)
+                        if (open == null || runCatching { getApplication<Application>().startActivity(open) }.isFailure) toast(R.string.download_failed)
+                    }
+                    com.voluene.monobrowser.download.DownloadStatus.FAILED -> showMessage(str(R.string.download_failed))
+                    else -> Unit
+                }
+            }
+        }
+    }
+
     private val _barHidden = MutableStateFlow(false)
     val barHidden: StateFlow<Boolean> = _barHidden.asStateFlow()
 
@@ -259,6 +297,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     }
 
     init {
+        ContextCompat.registerReceiver(
+            app, downloadReceiver, android.content.IntentFilter(android.app.DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            ContextCompat.RECEIVER_EXPORTED, // sent by the system's download provider
+        )
         val saved = sessionStore.load()
         if (saved != null) {
             _workspaces.value = saved.workspaces
@@ -625,6 +667,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     }
 
     override fun onCleared() {
+        runCatching { getApplication<Application>().unregisterReceiver(downloadReceiver) }
         flush()
         webViews.values.forEach { it.destroy() }
         webViews.clear()
@@ -888,18 +931,19 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     private fun openLink(url: String, sourceTabId: Long, background: Boolean, forcePrivate: Boolean) {
         val source = tab(sourceTabId)
         val isPrivate = LinkActions.opensPrivate(source?.isPrivate == true, forcePrivate)
-        newTab(
+        val id = newTab(
             isPrivate = isPrivate, url = url, background = background, workspaceId = source?.workspaceId ?: _currentWorkspaceId.value,
             openerId = sourceTabId.takeIf { !background && source != null && _tabs.value.any { it.id == sourceTabId } },
         )
-        if (background) toast(R.string.link_opened_background)
+        if (background) showMessage(str(R.string.link_opened_background), str(R.string.message_switch)) { switchTo(id) }
     }
 
     /** Copies [text] and confirms with a toast. */
     fun copyToClipboard(text: String) {
         val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
         clipboard?.setPrimaryClip(ClipData.newPlainText(null, text))
-        toast(R.string.link_copied)
+        // Android 13+ confirms copies itself.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) toast(R.string.link_copied)
     }
 
     /** Opens the preview sheet for [url]; replaces an open one (one glance at a time). */
@@ -942,10 +986,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
 
     /** "Open in background": the same, but the current tab stays in front. */
     fun backgroundGlance() {
-        adoptGlance() ?: return
+        val glance = adoptGlance() ?: return
         enforceSleepPolicy()
         schedulePersist()
-        toast(R.string.link_opened_background)
+        showMessage(str(R.string.link_opened_background), str(R.string.message_switch)) { switchTo(glance.id) }
     }
 
     /** Moves the glance (and its live WebView) into the tab list. */
@@ -997,11 +1041,26 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     fun topSites(limit: Int = TopSites.DEFAULT_LIMIT): List<TopSite> {
         val since = System.currentTimeMillis() - TOP_SITES_WINDOW_MS
         val counts = runCatching { history.mostVisited(since) }.getOrDefault(emptyList())
-        return TopSites.pick(counts, settingsFile.value.hiddenTopSites.toSet(), limit)
+        val pinned = settingsFile.value.pinnedSites.mapNotNull { p -> TopSites.hostKey(p.url)?.let { TopSite(p.url, p.title, it) } }
+        return TopSites.merge(pinned, TopSites.pick(counts, settingsFile.value.hiddenTopSites.toSet(), limit))
     }
 
     /** Removes a site from the start page (it comes back only after "Restore removed sites"). */
-    fun hideTopSite(host: String) = updateSettings { it.copy(hiddenTopSites = it.hiddenTopSites + host) }
+    fun hideTopSite(host: String) = updateSettings { s ->
+        s.copy(hiddenTopSites = s.hiddenTopSites + host, pinnedSites = s.pinnedSites.filter { TopSites.hostKey(it.url) != host })
+    }
+
+    fun isPinned(url: String): Boolean = settingsFile.value.pinnedSites.any { it.url == url }
+
+    /** Pins a page to the start page, or unpins it. */
+    fun togglePin(url: String, title: String) {
+        if (!UrlUtils.isHttpUrl(url)) return
+        val wasPinned = isPinned(url)
+        updateSettings { s ->
+            s.copy(pinnedSites = if (wasPinned) s.pinnedSites.filterNot { it.url == url } else s.pinnedSites + PinnedSite(url, title))
+        }
+        if (!wasPinned) showMessage(getApplication<Application>().getString(R.string.start_pinned))
+    }
 
     // --- Reader view ---
 
@@ -1017,13 +1076,13 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     }
 
     /** "Save for offline reading" without opening reader view. */
-    fun saveForLater(tabId: Long) {
+    fun saveForLater(tabId: Long, onShowList: () -> Unit) {
         extractArticle(tabId) { article ->
             if (article == null) {
                 toast(R.string.reader_unavailable)
             } else {
                 readingList.save(article)
-                toast(R.string.reading_saved)
+                showMessage(str(R.string.reading_saved), str(R.string.message_view), onShowList)
             }
         }
     }

@@ -119,6 +119,7 @@ fun BrowserScreen(manager: TabManager) {
     val glance by manager.glance.collectAsState()
     val thumbnails by manager.thumbnails.collectAsState()
     val readingItems by manager.readingList.items.collectAsState()
+    val message by manager.message.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
     val tab = tabs.firstOrNull { it.id == activeId } ?: return
     var overlay by remember { mutableStateOf(Overlay.None) }
@@ -330,7 +331,13 @@ fun BrowserScreen(manager: TabManager) {
         when (action.id) {
             PaletteActionId.NEW_TAB -> manager.openNewTab()
             PaletteActionId.NEW_PRIVATE_TAB -> manager.openNewTab(isPrivate = true)
-            PaletteActionId.CLOSE_TAB -> manager.closeTab(tab.id)
+            PaletteActionId.CLOSE_TAB -> {
+                val title = tab.title.ifBlank { UrlUtils.shortUrlLabel(tab.url) }
+                manager.closeTab(tab.id)
+                if (!tab.isPrivate && UrlUtils.isHttpUrl(tab.url)) {
+                    manager.showMessage(context.getString(R.string.tabs_closed, title), context.getString(R.string.tabs_undo)) { manager.undoCloseTab() }
+                }
+            }
             PaletteActionId.RELOAD -> manager.reload(tab.id)
             PaletteActionId.BACK -> manager.goBack(tab.id)
             PaletteActionId.FORWARD -> manager.goForward(tab.id)
@@ -354,7 +361,7 @@ fun BrowserScreen(manager: TabManager) {
             PaletteActionId.PRINT -> printPage()
             PaletteActionId.TEXT_SIZE -> textSizeOpen = true
             PaletteActionId.READING_LIST -> overlay = Overlay.ReadingList
-            PaletteActionId.SAVE_FOR_LATER -> manager.saveForLater(tab.id)
+            PaletteActionId.SAVE_FOR_LATER -> manager.saveForLater(tab.id) { overlay = Overlay.ReadingList }
         }
     }
 
@@ -372,7 +379,7 @@ fun BrowserScreen(manager: TabManager) {
 
     // A blank tab shows the start page over its (empty) WebView.
     val showStart = !tab.canGoBack && !tab.isLoading && (tab.url.isBlank() || UrlUtils.isAboutBlankUrl(tab.url))
-    val topSites by produceState<List<TopSite>?>(null, showStart, settings.showTopSites, settings.hiddenTopSites, tab.id) {
+    val topSites by produceState<List<TopSite>?>(null, showStart, settings.showTopSites, settings.hiddenTopSites, settings.pinnedSites, tab.id) {
         value = if (showStart && settings.showTopSites && !tab.isPrivate) withContext(Dispatchers.IO) { manager.topSites() } else value
     }
 
@@ -435,6 +442,13 @@ fun BrowserScreen(manager: TabManager) {
                         updater = manager.updater,
                         onOpenUrl = { manager.newTab(url = it) },
                         modifier = Modifier.align(if (toolbarTop) Alignment.BottomCenter else Alignment.TopCenter).padding(8.dp).widthIn(max = 480.dp),
+                    )
+                }
+                message?.let { m ->
+                    MessageBar(
+                        m, onDismiss = manager::dismissMessage,
+                        modifier = Modifier.align(if (toolbarTop) Alignment.TopCenter else Alignment.BottomCenter)
+                            .then(if (toolbarTop) Modifier else Modifier.imePadding()).padding(8.dp).widthIn(max = 520.dp),
                     )
                 }
                 val findState = find
@@ -576,6 +590,9 @@ fun BrowserScreen(manager: TabManager) {
             val hasClip = context.getSystemService(ClipboardManager::class.java)?.hasPrimaryClip() == true
             val entries = buildList {
                 if (isWeb) add(MenuEntry(R.string.address_copy) { manager.copyToClipboard(tab.url) })
+                if (isWeb && !tab.isPrivate) {
+                    add(MenuEntry(if (manager.isPinned(tab.url)) R.string.start_unpin else R.string.start_pin) { manager.togglePin(tab.url, tab.title) })
+                }
                 add(MenuEntry(R.string.address_paste_go, enabled = hasClip) { pasteAndGo() })
                 add(MenuEntry(R.string.address_edit) { overlay = Overlay.Palette })
                 if (isWeb) add(MenuEntry(R.string.address_share) { shareLink() })
@@ -586,6 +603,7 @@ fun BrowserScreen(manager: TabManager) {
             val entries = listOf(
                 MenuEntry(R.string.link_open_tab) { manager.newTab(url = site.url) },
                 MenuEntry(R.string.link_copy) { manager.copyToClipboard(site.url) },
+                MenuEntry(if (site.pinned) R.string.start_unpin else R.string.start_pin) { manager.togglePin(site.url, site.title) },
                 MenuEntry(R.string.start_remove_site) {
                     manager.hideTopSite(site.host)
                     toast(R.string.start_site_removed, site.host)

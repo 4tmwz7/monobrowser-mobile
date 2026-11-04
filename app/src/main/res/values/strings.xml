@@ -431,4 +431,11 @@
     <string name="reading_remove">Remove from reading list</string>
     <string name="reading_empty">Articles you save in reader view (the bookmark at the top) are kept here and can be read without a connection.</string>
     <string name="reading_show_all">Show all (%1$d)</string>
+    <string name="message_open">Open</string>
+    <string name="message_switch">Switch</string>
+    <string name="message_view">View</string>
+    <string name="download_complete">Downloaded %1$s</string>
+    <string name="start_pinned">Pinned to the start page</string>
+    <string name="start_pin">Pin to the start page</string>
+    <string name="start_unpin">Unpin from the start page</string>
 </resources>

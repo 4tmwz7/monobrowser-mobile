@@ -431,4 +431,11 @@
     <string name="reading_remove">Usuń z listy do przeczytania</string>
     <string name="reading_empty">Artykuły zapisane w trybie czytania (zakładka u góry) trafiają tutaj i można je czytać bez internetu.</string>
     <string name="reading_show_all">Pokaż wszystkie (%1$d)</string>
+    <string name="message_open">Otwórz</string>
+    <string name="message_switch">Przejdź</string>
+    <string name="message_view">Pokaż</string>
+    <string name="download_complete">Pobrano %1$s</string>
+    <string name="start_pinned">Przypięto do strony startowej</string>
+    <string name="start_pin">Przypnij do strony startowej</string>
+    <string name="start_unpin">Odepnij od strony startowej</string>
 </resources>

@@ -48,6 +48,10 @@ enum class WebDarkMode {
 @Serializable
 enum class LinkLongPress { GLANCE, MENU }
 
+/** A site pinned to the start page. */
+@Serializable
+data class PinnedSite(val url: String, val title: String = "")
+
 @Serializable
 data class AppSettings(
     val version: Int = 1,
@@ -82,6 +86,8 @@ data class AppSettings(
     /** Address bar: the whole URL instead of the site's host with a lock. */
     val showFullAddress: Boolean = false,
     val webDarkMode: WebDarkMode = WebDarkMode.AUTO,
+    /** Start page tiles the user pinned (shown before the most visited sites). */
+    val pinnedSites: List<PinnedSite> = emptyList(),
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String
@@ -97,6 +103,7 @@ data class AppSettings(
         val READER_FONT_RANGE = 14..30
         val TEXT_ZOOM_STEPS = listOf(75, 85, 100, 115, 130, 150, 175, 200)
         const val MAX_HIDDEN_TOP_SITES = 200
+        const val MAX_PINNED = 12
     }
 }
 
@@ -137,6 +144,8 @@ object SettingsCodec {
             newTabPage = if (s.newTabPage == NewTabPage.HOMEPAGE && home.isEmpty()) NewTabPage.BLANK else s.newTabPage,
             textZoom = s.textZoom.coerceIn(50, 300),
             readerFontSize = s.readerFontSize.coerceIn(AppSettings.READER_FONT_RANGE.first, AppSettings.READER_FONT_RANGE.last),
+            pinnedSites = s.pinnedSites.filter { UrlUtils.isHttpUrl(it.url) && it.url.length <= 2048 }
+                .distinctBy { it.url }.take(AppSettings.MAX_PINNED).map { it.copy(title = it.title.take(200)) },
             hiddenTopSites = s.hiddenTopSites.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
                 .takeLast(AppSettings.MAX_HIDDEN_TOP_SITES),
         )

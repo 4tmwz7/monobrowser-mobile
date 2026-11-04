@@ -5,8 +5,8 @@ import java.net.URI
 /** A URL with its visit count, as aggregated by [HistoryDb.mostVisited]. */
 data class VisitCount(val url: String, val title: String, val visits: Int, val lastVisit: Long)
 
-/** A tile of the start page. [host] is the label source and the key used to hide it. */
-data class TopSite(val url: String, val title: String, val host: String)
+/** A tile of the start page. [host] is the label source and the key used to hide it; [pinned] tiles come first. */
+data class TopSite(val url: String, val title: String, val host: String, val pinned: Boolean = false)
 
 /**
  * Start-page tiles from history: one tile per site (host without `www.`), the most visited URL of that site wins,
@@ -53,6 +53,14 @@ object TopSites {
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return false
         val path = uri.rawPath.orEmpty()
         return (path.isEmpty() || path == "/") && uri.rawQuery == null
+    }
+
+    const val MAX_TILES = 12
+
+    /** Pinned tiles first (in pin order), then frequent sites that are not pinned already (by host), up to [max]. */
+    fun merge(pinned: List<TopSite>, frequent: List<TopSite>, max: Int = MAX_TILES): List<TopSite> {
+        val pinnedHosts = pinned.map { it.host }.toSet()
+        return (pinned.map { it.copy(pinned = true) } + frequent.filter { it.host !in pinnedHosts }).take(max)
     }
 
     /** Short tile label: `news.ycombinator.com` -> `ycombinator`, `example.co.uk` -> `example`. */

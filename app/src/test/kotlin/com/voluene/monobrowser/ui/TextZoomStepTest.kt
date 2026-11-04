@@ -44,4 +44,16 @@ class TextZoomStepTest {
         assertEquals("MS", monogram("my-site"))
         assertEquals("?", monogram(""))
     }
+
+    @Test fun pinnedSitesAreSanitized() {
+        val pins = listOf(
+            com.voluene.monobrowser.settings.PinnedSite("https://a.com/", "A"),
+            com.voluene.monobrowser.settings.PinnedSite("https://a.com/", "dup"),
+            com.voluene.monobrowser.settings.PinnedSite("javascript:alert(1)", "bad"),
+        ) + List(20) { com.voluene.monobrowser.settings.PinnedSite("https://s$it.com/", "S") }
+        val s = SettingsCodec.sanitize(AppSettings(pinnedSites = pins))
+        assertEquals(AppSettings.MAX_PINNED, s.pinnedSites.size)
+        assertEquals("A", s.pinnedSites.first().title)
+        assertTrue(s.pinnedSites.none { it.url.startsWith("javascript") })
+    }
 }

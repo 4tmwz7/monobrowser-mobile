@@ -64,4 +64,14 @@ class TopSitesTest {
         assertEquals("localhost", TopSites.label("localhost"))
         assertEquals("onet", TopSites.label("onet.pl"))
     }
+
+    @Test fun pinnedTilesComeFirstAndReplaceTheSameSite() {
+        val pinned = listOf(TopSite("https://b.com/x", "B", "b.com"), TopSite("https://z.com/", "Z", "z.com"))
+        val frequent = listOf(TopSite("https://a.com/", "A", "a.com"), TopSite("https://b.com/", "B home", "b.com"), TopSite("https://c.com/", "C", "c.com"))
+        val merged = TopSites.merge(pinned, frequent, max = 4)
+        assertEquals(listOf("b.com", "z.com", "a.com", "c.com"), merged.map { it.host })
+        assertEquals(listOf(true, true, false, false), merged.map { it.pinned })
+        assertEquals("https://b.com/x", merged.first().url)
+        assertEquals(3, TopSites.merge(pinned, frequent, max = 3).size)
+    }
 }

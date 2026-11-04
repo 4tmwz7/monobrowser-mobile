@@ -229,12 +229,13 @@ private fun TileGrid(
                         ),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        // Pinned tiles are filled.
                         Box(
-                            Modifier.fillMaxWidth().aspectRatio(1f).background(bg).border(1.dp, fg, RectangleShape),
+                            Modifier.fillMaxWidth().aspectRatio(1f).background(if (site.pinned) fg else bg).border(1.dp, fg, RectangleShape),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                monogram(label), color = fg, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                                monogram(label), color = if (site.pinned) bg else fg, fontSize = 24.sp, fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
                             )
                         }
