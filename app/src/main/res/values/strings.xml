@@ -424,4 +424,5 @@
     <string name="settings_web_dark_auto">Sites that support it</string>
     <string name="settings_web_dark_force">All sites (darken the rest)</string>
     <string name="settings_web_dark_off">Never</string>
+    <string name="tile_private_tab">Private tab</string>
 </resources>

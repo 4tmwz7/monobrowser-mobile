@@ -424,4 +424,5 @@
     <string name="settings_web_dark_auto">Strony, które go obsługują</string>
     <string name="settings_web_dark_force">Wszystkie strony (przyciemniaj resztę)</string>
     <string name="settings_web_dark_off">Nigdy</string>
+    <string name="tile_private_tab">Karta prywatna</string>
 </resources>
