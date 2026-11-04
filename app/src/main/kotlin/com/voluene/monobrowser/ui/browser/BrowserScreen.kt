@@ -120,6 +120,7 @@ fun BrowserScreen(manager: TabManager) {
     val thumbnails by manager.thumbnails.collectAsState()
     val readingItems by manager.readingList.items.collectAsState()
     val message by manager.message.collectAsState()
+    val fullScreen by manager.fullScreen.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
     val tab = tabs.firstOrNull { it.id == activeId } ?: return
     var overlay by remember { mutableStateOf(Overlay.None) }
@@ -657,6 +658,8 @@ fun BrowserScreen(manager: TabManager) {
             )
         }
         (dialogs.firstOrNull { it.tabId == glance?.id } ?: dialogs.firstOrNull { it.tabId == activeId })?.let { PageDialogView(it) }
+        // Full screen video above everything else.
+        fullScreen?.let { FullScreenLayer(it, onExit = manager::exitFullScreen) }
         if (!settings.onboardingDone) {
             OnboardingScreen(
                 settings = settings,

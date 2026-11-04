@@ -168,6 +168,15 @@ class MonoWebChromeClient(
         return true
     }
 
+    override fun onShowCustomView(view: android.view.View, callback: CustomViewCallback) = ui.showCustomView(tabId, view, callback)
+
+    override fun onHideCustomView() = ui.hideCustomView()
+
+    override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean =
+        ui.createWindow(tabId, isUserGesture, resultMsg)
+
+    override fun onCloseWindow(window: WebView) = ui.closeWindow(tabId)
+
     private fun originLabel(url: String): String =
         SitePermissionStore.originOf(url)?.let(SitePermissionStore::hostOf) ?: url
 }

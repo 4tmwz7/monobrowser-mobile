@@ -237,6 +237,13 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         }
     }
 
+    /** The page element shown full screen (a video), with the WebView's callback to leave it. */
+    class FullScreen(val tabId: Long, val view: android.view.View, val callback: WebChromeClient.CustomViewCallback)
+
+    // Declared before init: opening the first tab already touches it.
+    private val _fullScreen = MutableStateFlow<FullScreen?>(null)
+    val fullScreen: StateFlow<FullScreen?> = _fullScreen.asStateFlow()
+
     private val _barHidden = MutableStateFlow(false)
     val barHidden: StateFlow<Boolean> = _barHidden.asStateFlow()
 
@@ -342,9 +349,11 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         background: Boolean = false,
         workspaceId: String = _currentWorkspaceId.value,
         openerId: Long? = null,
+        /** No URL at all, not even the homepage (a window a page is about to load into). */
+        blank: Boolean = false,
     ): Long {
         val workspace = workspaceId.takeIf { id -> _workspaces.value.any { it.id == id } } ?: WorkspaceOps.MAIN_ID
-        val target = url ?: settingsFile.value.newTabUrl
+        val target = if (blank) null else url ?: settingsFile.value.newTabUrl
         if (background) {
             val lazy = !isPrivate && target != null
             val tab = Tab(id = nextId++, isPrivate = isPrivate, workspaceId = workspace, url = if (lazy) target.orEmpty() else "", sleeping = lazy)
@@ -479,6 +488,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         val tab = _tabs.value.firstOrNull { it.id == id } ?: return
         if (_activeTabId.value != id) {
             closeFind()
+            exitFullScreen()
             captureThumbnail(_activeTabId.value) // the tab being left, as it looks now
         }
         _activeTabId.value = id
@@ -530,6 +540,54 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
     }
 
     override fun retryFailedLoad(tabId: Long) = reload(tabId)
+
+    // --- Full screen video ---
+
+
+    override fun showCustomView(tabId: Long, view: android.view.View, callback: WebChromeClient.CustomViewCallback) {
+        // Only the tab on screen may go full screen; a second request replaces the first.
+        if (tabId != _activeTabId.value) return callback.onCustomViewHidden()
+        _fullScreen.value?.callback?.onCustomViewHidden()
+        _fullScreen.value = FullScreen(tabId, view, callback)
+    }
+
+    override fun hideCustomView() {
+        _fullScreen.value = null
+    }
+
+    /** The user left full screen (back, or switching tabs): tell the page. */
+    fun exitFullScreen() {
+        val current = _fullScreen.value ?: return
+        _fullScreen.value = null
+        runCatching { current.callback.onCustomViewHidden() }
+    }
+
+    // --- New windows (target=_blank, window.open) ---
+
+    /** `window.close()`: only a tab that a page opened (it has an opener) may close itself. */
+    override fun closeWindow(tabId: Long) {
+        val tab = _tabs.value.firstOrNull { it.id == tabId } ?: return
+        if (tab.openerId == null) return
+        val opener = backTarget(tab.copy(canGoBack = false))
+        closeTab(tabId)
+        opener?.let(::switchTo)
+    }
+
+    override fun createWindow(tabId: Long, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
+        val source = tab(tabId) ?: return false
+        if (!isUserGesture) {
+            showMessage(str(R.string.popup_blocked))
+            return false
+        }
+        val id = newTab(
+            isPrivate = source.isPrivate, workspaceId = source.workspaceId, blank = true,
+            openerId = tabId.takeIf { _tabs.value.any { t -> t.id == it } },
+        )
+        val webView = webViews[id] ?: return false
+        (resultMsg.obj as? WebView.WebViewTransport)?.webView = webView
+        resultMsg.sendToTarget()
+        return true
+    }
 
     /** The WebView of a tab (rebuilt from saved state when the tab was sleeping). */
     fun webViewFor(id: Long): WebView? = webViews[id] ?: ensureLive(id)
@@ -593,6 +651,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
             allowFileAccess = false
             allowContentAccess = false
             setGeolocationEnabled(true) // every request still goes through the per-origin prompt
+            // target=_blank and window.open become new tabs (see createWindow); scripts cannot open windows on their own.
+            setSupportMultipleWindows(true)
+            javaScriptCanOpenWindowsAutomatically = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             textZoom = settingsFile.value.textZoom
             // Pinch-to-zoom without the old on-screen +/- buttons.
@@ -620,11 +681,12 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi {
         return webView
     }
 
-    private var mobileUserAgent: String? = null
+    /** The WebView's own (mobile) user agent; never read from a WebView that may already be in desktop mode. */
+    private val mobileUserAgent: String by lazy { WebSettings.getDefaultUserAgent(getApplication()) }
 
     private fun applyDesktopMode(webView: WebView, desktop: Boolean) {
         val settings = webView.settings
-        val mobile = mobileUserAgent ?: settings.userAgentString.also { mobileUserAgent = it }
+        val mobile = mobileUserAgent
         settings.userAgentString = if (desktop) DesktopMode.userAgent(mobile) else null // null = WebView default
         // Desktop pages are laid out at their full width and zoomed out to fit, like a desktop browser.
         settings.useWideViewPort = desktop

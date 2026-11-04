@@ -26,4 +26,17 @@ interface TabUi {
 
     /** The error page's retry button. */
     fun retryFailedLoad(tabId: Long)
+
+    /** HTML5 full screen (videos): show [view] over everything until [hideCustomView] or the user leaves it. */
+    fun showCustomView(tabId: Long, view: android.view.View, callback: WebChromeClient.CustomViewCallback)
+    fun hideCustomView()
+
+    /**
+     * `target=_blank` / `window.open`: a new tab whose WebView is handed back through [resultMsg].
+     * Returns false (blocked) for windows a script opens without a tap.
+     */
+    fun createWindow(tabId: Long, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean
+
+    /** `window.close()` from a page. */
+    fun closeWindow(tabId: Long)
 }
