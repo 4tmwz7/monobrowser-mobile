@@ -113,7 +113,7 @@ class ScreensTest {
             MenuTile(R.string.menu_print, MenuIcons.Print) {}, MenuTile(R.string.menu_settings, Icons.Filled.Settings) {},
         )
         browser(Tab(1, url = "https://example.com/article", blockedCount = 12)) {
-            BrowserMenuGrid(tiles, MenuInfo("Blocked on this page: 12", "Disable on this site"), {})
+            BrowserMenuGrid(tiles, listOf(MenuInfo("Blocked on this page: 12", "Disable on this site")), {})
         }
     }
 
@@ -207,7 +207,7 @@ class ScreensTest {
             MenuTile(R.string.tab_new, Icons.Filled.Add) {}, MenuTile(R.string.menu_new_private_short, Icons.Filled.Lock) {},
             MenuTile(R.string.menu_bookmarks, MenuIcons.Bookmark) {}, MenuTile(R.string.menu_settings, Icons.Filled.Settings) {},
         )
-        BrowserMenuGrid(tiles, MenuInfo("Blocked on this page: 12", "Disable on this site"), {})
+        BrowserMenuGrid(tiles, listOf(MenuInfo("Blocked on this page: 12", "Disable on this site")), {})
     }
 
     @Test fun cornersTabs() = roundedPhone("corners_tabs") {

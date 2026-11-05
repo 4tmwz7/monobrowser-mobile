@@ -125,9 +125,9 @@ Release builds are signed with the project key, which differs from a debug build
 ### Look and feel
 
 - Strictly black / white / grey and rectangular, light and dark, with optional flat colour themes from the desktop app.
-- **Dark mode for websites:**
-  - follows the app (sites with a dark design use it);
-  - can darken all sites, or be turned off.
+- **Page theme** independent of the browser theme (for example a dark browser with light pages):
+  - the global setting is system / light / dark, and each site can override it from the menu or the palette (applies to its subdomains too);
+  - sites with a dark design use it, and sites without one can be darkened automatically (Android 13+).
 - **Corners** that touch the phone's rounded screen corners follow them (concentric radius, Android 12+). Everything else stays square.
 - **Motion:**
   - sheets rise from the bottom, dialogs pop in with a soft spring, menu tiles arrive one after another;

@@ -24,6 +24,8 @@ import java.io.ByteArrayInputStream
 
 /** State callbacks from a tab's WebView; implemented by [TabManager]. */
 interface TabEvents {
+    /** A main-frame navigation to [url] is about to start (before it loads): the page theme of its site must already apply. */
+    fun onNavigationRequest(tabId: Long, url: String)
     fun onPageStarted(tabId: Long, url: String)
     fun onPageFinished(tabId: Long, url: String)
     fun onNavState(tabId: Long, url: String?, canGoBack: Boolean, canGoForward: Boolean)
@@ -50,6 +52,7 @@ class MonoWebViewClient(
             return true
         }
         val action = ExternalLinks.classify(url)
+        if (request.isForMainFrame && action == LinkAction.Load) events.onNavigationRequest(tabId, url)
         if (action == LinkAction.Load) {
             // Only taps on links (not redirects, not form posts): drop click trackers from the address.
             return request.isForMainFrame && request.hasGesture() && !request.isRedirect && request.method.equals("GET", true) &&
@@ -95,6 +98,7 @@ class MonoWebViewClient(
 
     override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
         sourceUrl = url
+        events.onNavigationRequest(tabId, url) // history navigations (back/forward, bfcache) may not report a page start
         events.onNavState(tabId, url, view.canGoBack(), view.canGoForward())
     }
 

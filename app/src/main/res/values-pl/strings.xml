@@ -420,10 +420,6 @@
     <string name="site_permission_reset">Resetuj</string>
     <string name="settings_full_address">Pokazuj pełny adres</string>
     <string name="settings_full_address_hint">W przeciwnym razie pasek adresu pokazuje stronę, z kłódką przy bezpiecznym połączeniu</string>
-    <string name="settings_web_dark">Tryb ciemny stron</string>
-    <string name="settings_web_dark_auto">Strony, które go obsługują</string>
-    <string name="settings_web_dark_force">Wszystkie strony (przyciemniaj resztę)</string>
-    <string name="settings_web_dark_off">Nigdy</string>
     <string name="tile_private_tab">Karta prywatna</string>
     <string name="reading_list">Do przeczytania</string>
     <string name="reading_save">Zapisz do czytania offline</string>
@@ -516,4 +512,18 @@
     <string name="media_forward">10 s do przodu</string>
     <string name="settings_pip_page">Cała strona w okienku wideo</string>
     <string name="settings_pip_page_hint">Okienko pokazuje pomniejszoną stronę z jej własnymi kontrolkami odtwarzacza. Wyłączone: samo wideo.</string>
+    <!-- Page theme (independent of the browser theme) -->
+    <string name="page_theme_default">Domyślny (%1$s)</string>
+    <string name="page_theme_light">Jasny</string>
+    <string name="page_theme_dark">Ciemny</string>
+    <string name="page_theme_dialog_title">Motyw strony dla %1$s</string>
+    <string name="palette_page_theme_site">Motyw strony dla tej witryny\u2026</string>
+    <string name="settings_page_theme">Motyw stron</string>
+    <string name="settings_darken_pages">Przyciemniaj strony bez ciemnego motywu</string>
+    <string name="settings_darken_pages_hint">Gdy strona jest ciemna, witryny bez trybu ciemnego są przyciemniane automatycznie.</string>
+    <string name="settings_site_themes">Motyw stron dla witryn</string>
+    <string name="settings_site_themes_count">Witryn: %1$d</string>
+    <string name="settings_site_themes_hint">Na tych witrynach (i ich subdomenach) motyw strony jest stały, niezależnie od ustawienia motywu stron.</string>
+    <string name="settings_site_themes_empty">Brak witryn. Ustaw z menu \u22EE na stronie.</string>
+    <string name="menu_page_theme">Motyw strony</string>
 </resources>

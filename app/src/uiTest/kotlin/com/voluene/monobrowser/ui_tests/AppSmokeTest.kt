@@ -111,7 +111,7 @@ class AppSmokeTest {
         compose.waitForIdle(); compose.mainClock.advanceTimeBy(600)
         compose.onNodeWithText("Search settings").performTextInput("dark")
         save("settings_search")
-        compose.onNodeWithText("Dark mode for websites").assertExists()
+        compose.onNodeWithText("Darken sites without a dark theme").assertExists()
         org.junit.Assert.assertTrue(compose.onAllNodesWithText("Search engine").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithText("dark").performTextClearance()
         compose.onNodeWithText("Search settings").performTextInput("sync")
@@ -181,13 +181,14 @@ class AppSmokeTest {
             }
             return light
         }
-        org.junit.Assert.assertTrue("light app -> light web context", isLight())
-        compose.runOnUiThread { manager.updateSettings { it.copy(themeMode = com.voluene.monobrowser.settings.ThemeMode.DARK) } }
+        org.junit.Assert.assertTrue("light page theme -> light web context", isLight())
+        // The page theme is independent of the browser theme: a dark browser keeps light pages.
+        compose.runOnUiThread { manager.updateSettings { it.copy(themeMode = com.voluene.monobrowser.settings.ThemeMode.DARK, pageThemeMode = com.voluene.monobrowser.settings.ThemeMode.LIGHT) } }
         save("app_dark")
-        org.junit.Assert.assertFalse("dark app -> dark web context", isLight())
-        compose.runOnUiThread { manager.updateSettings { it.copy(webDarkMode = com.voluene.monobrowser.settings.WebDarkMode.OFF) } }
-        save("app_dark_weboff")
-        org.junit.Assert.assertTrue("web dark off -> light web context", isLight())
+        org.junit.Assert.assertTrue("dark app, light page theme -> light web context", isLight())
+        compose.runOnUiThread { manager.updateSettings { it.copy(pageThemeMode = com.voluene.monobrowser.settings.ThemeMode.DARK) } }
+        save("app_dark_webdark")
+        org.junit.Assert.assertFalse("dark page theme -> dark web context", isLight())
         // Memory pressure and background / foreground must not break the visible tab.
         compose.runOnUiThread { manager.newTab(url = "https://example.com/"); manager.onLowMemory(); manager.onAppVisible(false); manager.onAppVisible(true) }
         save("app_after_low_memory")

@@ -6,7 +6,7 @@ import java.text.Normalizer
 /** Identifiers of palette commands; the UI maps them to behaviour. */
 enum class PaletteActionId {
     NEW_TAB, NEW_PRIVATE_TAB, CLOSE_TAB, RELOAD, BACK, FORWARD, REOPEN_CLOSED, FIND,
-    BOOKMARK_PAGE, SHARE, TOGGLE_ADBLOCK_SITE, TOGGLE_ADBLOCK,
+    BOOKMARK_PAGE, SHARE, TOGGLE_ADBLOCK_SITE, TOGGLE_ADBLOCK, PAGE_THEME_SITE,
     OPEN_BOOKMARKS, OPEN_HISTORY, OPEN_DOWNLOADS, OPEN_SETTINGS,
     /** [PaletteAction.arg] = workspace id. */
     SWITCH_WORKSPACE, NEW_WORKSPACE,

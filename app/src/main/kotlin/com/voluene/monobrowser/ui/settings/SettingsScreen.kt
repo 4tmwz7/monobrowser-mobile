@@ -51,7 +51,6 @@ import com.voluene.monobrowser.settings.ThemeMode
 import com.voluene.monobrowser.settings.Themes
 import com.voluene.monobrowser.settings.LinkLongPress
 import com.voluene.monobrowser.settings.ToolbarPosition
-import com.voluene.monobrowser.settings.WebDarkMode
 import com.voluene.monobrowser.ui.common.ChoiceDialog
 import com.voluene.monobrowser.ui.common.ConfirmDialog
 import com.voluene.monobrowser.ui.common.HairLine
@@ -79,7 +78,7 @@ internal fun settingMatches(query: String, title: String, subtitle: String?): Bo
     return com.voluene.monobrowser.ui.palette.PaletteEngine.fold(query).split(' ').filter { it.isNotBlank() }.all { haystack.contains(it) }
 }
 
-private enum class Page { Main, Theme, Exceptions, Permissions, Licenses, Tips }
+private enum class Page { Main, Theme, SiteThemes, Exceptions, Permissions, Licenses, Tips }
 
 private const val WEBSITE = "https://monobrowser.vercel.app"
 
@@ -95,6 +94,7 @@ fun SettingsScreen(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: ()
         when (shown) {
             Page.Main -> Unit
             Page.Theme -> ThemePage(manager, back)
+            Page.SiteThemes -> SiteThemesPage(manager, back)
             Page.Exceptions -> ExceptionsPage(manager, back)
             Page.Permissions -> PermissionsPage(manager, back)
             Page.Licenses -> LicensesPage(back)
@@ -159,6 +159,7 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
     val settings by manager.settings.collectAsState()
     val lists by manager.adBlocker.listsStatus.collectAsState()
     val exceptions by manager.adBlocker.exceptions.hostsFlow.collectAsState()
+    val siteThemes by manager.siteThemes.state.collectAsState()
     var dialog by remember { mutableStateOf<String?>(null) }
     var clearDialog by remember { mutableStateOf(false) }
     var syncSetup by remember { mutableStateOf(false) }
@@ -176,11 +177,6 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
     val linkNames = mapOf(LinkLongPress.GLANCE to stringResource(R.string.settings_link_glance), LinkLongPress.MENU to stringResource(R.string.settings_link_menu))
     val modeNames = mapOf(ThemeMode.SYSTEM to stringResource(R.string.settings_mode_system), ThemeMode.LIGHT to stringResource(R.string.settings_mode_light), ThemeMode.DARK to stringResource(R.string.settings_mode_dark))
     val themeName = Themes.find(settings.themeId)?.name ?: stringResource(R.string.settings_theme_default)
-    val webDarkNames = mapOf(
-        WebDarkMode.AUTO to stringResource(R.string.settings_web_dark_auto),
-        WebDarkMode.FORCE to stringResource(R.string.settings_web_dark_force),
-        WebDarkMode.OFF to stringResource(R.string.settings_web_dark_off),
-    )
 
     var query by remember { mutableStateOf("") }
     ScreenScaffold(stringResource(R.string.settings_title), onClose) {
@@ -224,7 +220,9 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             SettingRow(stringResource(R.string.settings_theme), themeName, onClick = { open(Page.Theme) })
             SettingRow(stringResource(R.string.settings_mode), modeNames[settings.themeMode], onClick = { dialog = "mode" })
             SettingRow(stringResource(R.string.settings_text_size), stringResource(R.string.text_size_value, settings.textZoom), onClick = { dialog = "textSize" })
-            SettingRow(stringResource(R.string.settings_web_dark), webDarkNames[settings.webDarkMode], onClick = { dialog = "webDark" })
+            SettingRow(stringResource(R.string.settings_page_theme), modeNames[settings.pageThemeMode], onClick = { dialog = "pageMode" })
+            SwitchRow(stringResource(R.string.settings_darken_pages), stringResource(R.string.settings_darken_pages_hint), settings.darkenPages) { v -> update { it.copy(darkenPages = v) } }
+            SettingRow(stringResource(R.string.settings_site_themes), stringResource(R.string.settings_site_themes_count, siteThemes.size), onClick = { open(Page.SiteThemes) })
 
             Section(stringResource(R.string.settings_section_privacy))
             SwitchRow(stringResource(R.string.settings_adblock), stringResource(R.string.settings_adblock_hint), settings.adblockEnabled) { v -> update { it.copy(adblockEnabled = v) } }
@@ -286,8 +284,8 @@ private fun MainPage(manager: TabManager, onOpenUrl: (String) -> Unit, onClose: 
             onChange = { zoom -> update { it.copy(textZoom = zoom) } },
             onDismiss = { dialog = null },
         )
-        "webDark" -> ChoiceDialog(stringResource(R.string.settings_web_dark), webDarkNames.toList(), settings.webDarkMode, { c -> update { it.copy(webDarkMode = c) } }, { dialog = null })
         "mode" -> ChoiceDialog(stringResource(R.string.settings_mode), modeNames.toList(), settings.themeMode, { c -> update { it.copy(themeMode = c) } }, { dialog = null })
+        "pageMode" -> ChoiceDialog(stringResource(R.string.settings_page_theme), modeNames.toList(), settings.pageThemeMode, { c -> update { it.copy(pageThemeMode = c) } }, { dialog = null })
         "customUrl" -> TextInputDialog(
             stringResource(R.string.settings_custom_url), settings.customSearchUrl.takeIf { settings.searchEngine == SearchEngine.CUSTOM }.orEmpty(),
             stringResource(R.string.settings_custom_url_hint), stringResource(R.string.dialog_ok),
@@ -444,6 +442,25 @@ private fun ThemeRow(name: String, preset: com.voluene.monobrowser.settings.Them
         }
     }
     HairLine()
+}
+
+// ---- per-site page themes ----
+
+@Composable
+private fun SiteThemesPage(manager: TabManager, onBack: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val sites by manager.siteThemes.state.collectAsState()
+    SubPage(stringResource(R.string.settings_site_themes), onBack) {
+        Text(stringResource(R.string.settings_site_themes_hint), color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        if (sites.isEmpty()) {
+            Text(stringResource(R.string.settings_site_themes_empty), color = scheme.onBackground.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
+        }
+        sites.forEach { (host, theme) ->
+            SettingRow(host, stringResource(if (theme == com.voluene.monobrowser.settings.SiteTheme.DARK) R.string.page_theme_dark else R.string.page_theme_light), onClick = null) {
+                MonoButton(stringResource(R.string.settings_remove), { manager.siteThemes.set(host, null) })
+            }
+        }
+    }
 }
 
 // ---- adblock exceptions ----

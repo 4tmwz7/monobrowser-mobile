@@ -72,4 +72,26 @@ class AppSettingsTest {
         assertEquals(LinkLongPress.GLANCE, SettingsCodec.decode("""{"adblockEnabled":false}""")!!.linkLongPress) // settings from before phase 4
         assertEquals(LinkLongPress.GLANCE, SettingsCodec.decode("""{"linkLongPress":"EXPLODE"}""")!!.linkLongPress)
     }
+
+    @Test fun pageThemeDefaultsKeepTodaysBehaviourAndRoundTrip() {
+        val d = SettingsCodec.decode("""{"themeMode":"DARK"}""")!! // settings from before the page theme existed
+        assertEquals(ThemeMode.SYSTEM, d.pageThemeMode)
+        assertTrue(d.darkenPages)
+        assertEquals(ThemeMode.DARK, d.themeMode)
+        val s = AppSettings(themeMode = ThemeMode.DARK, pageThemeMode = ThemeMode.LIGHT, darkenPages = false)
+        assertEquals(s, SettingsCodec.decode(SettingsCodec.encode(s)))
+        assertEquals(ThemeMode.SYSTEM, SettingsCodec.decode("""{"pageThemeMode":"SEPIA"}""")!!.pageThemeMode)
+    }
+
+    @Test
+    fun migratesWebDarkModeFrom020() {
+        val off = SettingsCodec.decode("""{"themeMode":"DARK","webDarkMode":"OFF"}""")!!
+        assertEquals(ThemeMode.LIGHT, off.pageThemeMode); assertFalse(off.darkenPages); assertNull(off.webDarkMode)
+        val auto = SettingsCodec.decode("""{"themeMode":"DARK","webDarkMode":"AUTO"}""")!!
+        assertEquals(ThemeMode.DARK, auto.pageThemeMode); assertFalse(auto.darkenPages)
+        val force = SettingsCodec.decode("""{"themeMode":"LIGHT","webDarkMode":"FORCE"}""")!!
+        assertEquals(ThemeMode.LIGHT, force.pageThemeMode); assertTrue(force.darkenPages)
+        // Already migrated / new install: untouched.
+        assertEquals(ThemeMode.SYSTEM, SettingsCodec.decode("""{"themeMode":"DARK"}""")!!.pageThemeMode)
+    }
 }

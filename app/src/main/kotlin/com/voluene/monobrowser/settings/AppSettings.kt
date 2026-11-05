@@ -37,17 +37,6 @@ enum class ToolbarPosition { BOTTOM, TOP }
 @Serializable
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/** Dark mode for web pages (only matters while the app itself is dark). */
-@Serializable
-enum class WebDarkMode {
-    /** Pages that have their own dark design use it (prefers-color-scheme follows the app). */
-    AUTO,
-    /** Additionally darken pages without a dark design (algorithmic darkening). */
-    FORCE,
-    /** Pages always render light. */
-    OFF,
-}
-
 /** Default action of a long-press on a link in a page (desktop: Glance trigger; mobile has only the long-press). */
 @Serializable
 enum class LinkLongPress { GLANCE, MENU }
@@ -69,6 +58,12 @@ data class AppSettings(
     val linkLongPress: LinkLongPress = LinkLongPress.GLANCE,
     val themeId: String = Themes.DEFAULT_ID,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** Light/dark of web pages (`prefers-color-scheme`), independent of the browser UI [themeMode]; per-site overrides win. */
+    val pageThemeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** When a page is dark, darken sites that have no dark theme of their own (WebView algorithmic darkening). */
+    val darkenPages: Boolean = true,
+    /** 0.2.0 setting (AUTO/FORCE/OFF, pages followed the app theme); read once by [SettingsCodec.decode], then dropped. */
+    val webDarkMode: String? = null,
     val adblockEnabled: Boolean = true,
     val wifiOnlyListUpdates: Boolean = false,
     val onboardingDone: Boolean = false,
@@ -89,7 +84,6 @@ data class AppSettings(
     val searchSuggestions: Boolean = true,
     /** Address bar: the whole URL instead of the site's host with a lock. */
     val showFullAddress: Boolean = false,
-    val webDarkMode: WebDarkMode = WebDarkMode.AUTO,
     /** Start page tiles the user pinned (shown before the most visited sites). */
     val pinnedSites: List<PinnedSite> = emptyList(),
     /** Remove utm_*, fbclid, gclid and similar trackers from links you open, copy and share. */
@@ -141,7 +135,15 @@ object SettingsCodec {
 
     /** Null when the text is not valid JSON; otherwise always a consistent settings object. */
     fun decode(text: String): AppSettings? =
-        runCatching { sanitize(json.decodeFromString(AppSettings.serializer(), text)) }.getOrNull()
+        runCatching { sanitize(migrate(json.decodeFromString(AppSettings.serializer(), text))) }.getOrNull()
+
+    /** 0.2.0 `webDarkMode` -> page theme settings, keeping what the user saw: AUTO/FORCE followed the app's mode. */
+    fun migrate(s: AppSettings): AppSettings = when (s.webDarkMode) {
+        null -> s
+        "OFF" -> s.copy(pageThemeMode = ThemeMode.LIGHT, darkenPages = false, webDarkMode = null)
+        "FORCE" -> s.copy(pageThemeMode = s.themeMode, darkenPages = true, webDarkMode = null)
+        else -> s.copy(pageThemeMode = s.themeMode, darkenPages = false, webDarkMode = null)
+    }
 
     fun sanitize(s: AppSettings): AppSettings {
         val custom = s.customSearchUrl.trim().takeIf(::isValidSearchUrl) ?: AppSettings.DEFAULT_CUSTOM_SEARCH_URL

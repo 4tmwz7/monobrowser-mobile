@@ -5,7 +5,4 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
-    <!-- Context themes of the WebViews: pages see prefers-color-scheme light / dark from these. -->
-    <style name="Theme.MonoBrowser.WebLight" parent="android:Theme.Material.Light.NoActionBar" />
-    <style name="Theme.MonoBrowser.WebDark" parent="android:Theme.Material.NoActionBar" />
 </resources>

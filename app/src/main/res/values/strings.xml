@@ -420,10 +420,6 @@
     <string name="site_permission_reset">Reset</string>
     <string name="settings_full_address">Show full address</string>
     <string name="settings_full_address_hint">Otherwise the address bar shows the site, with a lock for secure connections</string>
-    <string name="settings_web_dark">Dark mode for websites</string>
-    <string name="settings_web_dark_auto">Sites that support it</string>
-    <string name="settings_web_dark_force">All sites (darken the rest)</string>
-    <string name="settings_web_dark_off">Never</string>
     <string name="tile_private_tab">Private tab</string>
     <string name="reading_list">Reading list</string>
     <string name="reading_save">Save for offline reading</string>
@@ -516,4 +512,18 @@
     <string name="media_forward">Forward 10 s</string>
     <string name="settings_pip_page">Whole page in the video window</string>
     <string name="settings_pip_page_hint">The floating window shows the site made small, with its own player controls. Off: only the video.</string>
+    <!-- Page theme (independent of the browser theme) -->
+    <string name="page_theme_default">Default (%1$s)</string>
+    <string name="page_theme_light">Light</string>
+    <string name="page_theme_dark">Dark</string>
+    <string name="page_theme_dialog_title">Page theme for %1$s</string>
+    <string name="palette_page_theme_site">Page theme for this site\u2026</string>
+    <string name="settings_page_theme">Page theme</string>
+    <string name="settings_darken_pages">Darken sites without a dark theme</string>
+    <string name="settings_darken_pages_hint">When a page is dark, sites that do not support dark mode are darkened automatically.</string>
+    <string name="settings_site_themes">Page theme per site</string>
+    <string name="settings_site_themes_count">%1$d sites</string>
+    <string name="settings_site_themes_hint">On these sites (and their subdomains) the page theme is fixed, regardless of the page theme setting.</string>
+    <string name="settings_site_themes_empty">No sites. Set one from the menu \u22EE on a page.</string>
+    <string name="menu_page_theme">Page theme</string>
 </resources>

@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,8 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -43,7 +42,11 @@ import com.voluene.monobrowser.ui.update.UpdateBanner
 import com.voluene.monobrowser.ui.tabs.WorkspaceEditorDialog
 import com.voluene.monobrowser.ui.tabs.WorkspaceUiState
 import com.voluene.monobrowser.data.BookmarkOps
+import com.voluene.monobrowser.settings.PageThemes
+import com.voluene.monobrowser.settings.SiteTheme
+import com.voluene.monobrowser.settings.SiteThemes
 import com.voluene.monobrowser.settings.ToolbarPosition
+import com.voluene.monobrowser.ui.common.ChoiceDialog
 import com.voluene.monobrowser.ui.bookmarks.BookmarksScreen
 import com.voluene.monobrowser.ui.downloads.DownloadsScreen
 import com.voluene.monobrowser.ui.history.HistoryScreen
@@ -136,6 +139,8 @@ fun BrowserScreen(manager: TabManager) {
     val settings by manager.settings.collectAsState()
     val bookmarks by manager.bookmarks.collectAsState()
     val exceptionHosts by manager.adBlocker.exceptions.hostsFlow.collectAsState()
+    val siteThemesNormal by manager.siteThemes.state.collectAsState()
+    val siteThemesPrivate by manager.siteThemes.privateState.collectAsState()
     val workspaces by manager.workspaces.collectAsState()
     val currentWorkspaceId by manager.currentWorkspaceId.collectAsState()
     val glance by manager.glance.collectAsState()
@@ -173,15 +178,14 @@ fun BrowserScreen(manager: TabManager) {
     var siteOptions by remember { mutableStateOf<TopSite?>(null) }
     var siteInfo by remember { mutableStateOf<TabManager.SiteInfo?>(null) }
     var historySteps by remember { mutableStateOf<List<TabManager.HistoryStep>?>(null) }
+    var pageThemeDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val toolbarTop = settings.toolbarPosition == ToolbarPosition.TOP
 
-    // The page background follows the theme (blank tabs, areas that have not painted yet).
-    LaunchedEffect(scheme.background) { manager.setPageBackground(scheme.background.toArgb()) }
-    // Web pages follow the app's light / dark appearance (Settings -> Dark mode for websites).
-    val appDark = scheme.background.luminance() < 0.5f
-    LaunchedEffect(appDark, settings.webDarkMode) { manager.setWebAppearance(appDark) }
+    // Pages that follow the system theme need to know when it changes (the browser UI theme is a separate setting).
+    val systemDark = isSystemInDarkTheme()
+    LaunchedEffect(systemDark) { manager.setSystemDark(systemDark) }
     // A blank new tab was opened or reused: go straight to typing.
     LaunchedEffect(manager) { manager.paletteRequests.collect { overlay = Overlay.Palette } }
     // Update checks begin once the first frame is on screen (non-blocking, release builds only).
@@ -208,6 +212,9 @@ fun BrowserScreen(manager: TabManager) {
     val isWeb = UrlUtils.isHttpUrl(tab.url)
     val siteHost = HostUtils.hostOfUrl(tab.url)
     val siteExcepted = siteHost != null && HostUtils.isHostExcepted(siteHost, exceptionHosts.toSet())
+    val siteMatch = if (siteHost != null && isWeb) SiteThemes.find(siteHost, if (tab.isPrivate) siteThemesPrivate else siteThemesNormal) else null
+    val siteOverride = siteMatch?.second
+    val globalPageDark = PageThemes.isDark(settings.pageThemeMode, systemDark, null)
     val bookmarked = isWeb && BookmarkOps.findByUrl(bookmarks, tab.url) != null
 
     fun shareText(text: String) {
@@ -305,14 +312,16 @@ fun BrowserScreen(manager: TabManager) {
         MenuTile(R.string.menu_note_add_short, Icons.Filled.List, enabled = isWeb && !tab.isPrivate) { manager.addPageToNote(tab.id) }
             .takeIf { !manager.canFloatVideo() },
         MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
-        MenuTile(R.string.menu_text_size, MenuIcons.TextSize) { textSizeOpen = true },
+        MenuTile(R.string.menu_page_theme, MenuIcons.Contrast, enabled = isWeb && siteHost != null) { pageThemeDialog = true },
         // Print / PDF: "/drukuj" or "/print" in the address bar.
     ) }
-    val menuInfo: @Composable () -> MenuInfo? = { when {
-        !isWeb -> null
-        !settings.adblockEnabled -> MenuInfo(stringResource(R.string.menu_adblock_header_off))
-        siteExcepted -> MenuInfo(stringResource(R.string.menu_adblock_header_site_off), stringResource(R.string.menu_adblock_toggle_on)) { manager.toggleAdblockForSite(tab.id) }
-        else -> MenuInfo(stringResource(R.string.menu_adblock_header, tab.blockedCount), stringResource(R.string.menu_adblock_toggle_off)) { manager.toggleAdblockForSite(tab.id) }
+    val menuInfo: @Composable () -> List<MenuInfo> = { buildList {
+        when {
+            !isWeb -> Unit
+            !settings.adblockEnabled -> add(MenuInfo(stringResource(R.string.menu_adblock_header_off)))
+            siteExcepted -> add(MenuInfo(stringResource(R.string.menu_adblock_header_site_off), stringResource(R.string.menu_adblock_toggle_on)) { manager.toggleAdblockForSite(tab.id) })
+            else -> add(MenuInfo(stringResource(R.string.menu_adblock_header, tab.blockedCount), stringResource(R.string.menu_adblock_toggle_off)) { manager.toggleAdblockForSite(tab.id) })
+        }
     } }
 
     val paletteActions: @Composable () -> List<PaletteAction> = { val labelNewTab = stringResource(R.string.tab_new)
@@ -348,6 +357,13 @@ fun BrowserScreen(manager: TabManager) {
                 PaletteActionId.TOGGLE_ADBLOCK_SITE,
                 stringResource(if (siteExcepted) R.string.menu_adblock_site_on else R.string.menu_adblock_site_off),
                 "reklamy adblock blokowanie ads blocking witryna site wyjatek exception",
+            ))
+        }
+        if (isWeb && siteHost != null) {
+            add(PaletteAction(
+                PaletteActionId.PAGE_THEME_SITE,
+                stringResource(R.string.palette_page_theme_site),
+                "motyw strony ciemny jasny tryb page theme dark light mode witryna site",
             ))
         }
         add(PaletteAction(
@@ -400,6 +416,7 @@ fun BrowserScreen(manager: TabManager) {
             PaletteActionId.BOOKMARK_PAGE -> manager.toggleBookmark(tab.id)
             PaletteActionId.SHARE -> shareLink()
             PaletteActionId.TOGGLE_ADBLOCK_SITE -> manager.toggleAdblockForSite(tab.id)
+            PaletteActionId.PAGE_THEME_SITE -> pageThemeDialog = true
             PaletteActionId.TOGGLE_ADBLOCK -> manager.updateSettings { it.copy(adblockEnabled = !it.adblockEnabled) }
             PaletteActionId.OPEN_BOOKMARKS -> overlay = Overlay.Bookmarks
             PaletteActionId.OPEN_HISTORY -> overlay = Overlay.History
@@ -741,6 +758,19 @@ fun BrowserScreen(manager: TabManager) {
                 onOpenInBackground = manager::backgroundGlance,
                 onClose = manager::closeGlance,
                 loadProgress = { loadProgress.value[g.id] ?: g.progress },
+            )
+        }
+        if (pageThemeDialog && siteHost != null) {
+            ChoiceDialog(
+                title = stringResource(R.string.page_theme_dialog_title, siteHost.removePrefix("www.")),
+                options = listOf(
+                    null to stringResource(R.string.page_theme_default, stringResource(if (globalPageDark) R.string.page_theme_dark else R.string.page_theme_light)),
+                    SiteTheme.LIGHT to stringResource(R.string.page_theme_light),
+                    SiteTheme.DARK to stringResource(R.string.page_theme_dark),
+                ),
+                selected = siteOverride,
+                onSelect = { manager.setSiteTheme(tab.id, it) },
+                onDismiss = { pageThemeDialog = false },
             )
         }
         Presence(creatingWorkspace) {

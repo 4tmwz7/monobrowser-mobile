@@ -181,4 +181,11 @@ class PaletteEngineTest {
         assertEquals("zamknijkarte", PaletteEngine.slug("Zamknij kartę"))
         assertEquals("trybpulpitu", PaletteEngine.slug("Tryb pulpitu!"))
     }
+    @Test fun pageThemeActionFoundByEitherLanguage() {
+        for (q in listOf("page theme", "motyw", "ciemny", "dark")) {
+            val themeAction = PaletteAction(PaletteActionId.PAGE_THEME_SITE, "Page theme for this site", "motyw strony ciemny jasny dark light")
+            val ids = PaletteEngine.search(q, tabs, bookmarks, emptyList(), actions + themeAction).filterIsInstance<PaletteResult.Run>().map { it.action.id }
+            assertTrue(q, PaletteActionId.PAGE_THEME_SITE in ids)
+        }
+    }
 }

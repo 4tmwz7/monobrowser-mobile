@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.webkit.ProfileStore
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.voluene.monobrowser.R
@@ -38,13 +39,12 @@ import com.voluene.monobrowser.data.WorkspaceOps
 import com.voluene.monobrowser.notes.NotesRepository
 import com.voluene.monobrowser.notes.NotesStore
 import com.voluene.monobrowser.settings.AppSettings
+import com.voluene.monobrowser.settings.PageThemes
 import com.voluene.monobrowser.settings.SettingsCodec
+import com.voluene.monobrowser.settings.SiteTheme
+import com.voluene.monobrowser.settings.SiteThemes
 import com.voluene.monobrowser.settings.StartupMode
-import com.voluene.monobrowser.settings.Themes
-import com.voluene.monobrowser.settings.WebDarkMode
 import com.voluene.monobrowser.settings.PinnedSite
-import android.view.ContextThemeWrapper
-import androidx.webkit.WebSettingsCompat
 import com.voluene.monobrowser.util.StateFile
 import kotlinx.coroutines.flow.receiveAsFlow
 import android.webkit.WebStorage
@@ -112,6 +112,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     // adblock: adblock-rust engine (falls back to allow-all until ready)
     val adBlocker: RustAdBlocker = Adblock.get(app, settingsFile.value.wifiOnlyListUpdates, settingsFile.value.adblockEnabled)
 
+    /** Per-site page theme overrides (`adblock/site-themes.json`, next to the adblock exceptions). */
+    val siteThemes = SiteThemes(File(File(app.filesDir, "adblock"), "site-themes.json"))
+
     val history = HistoryDb(app)
     val downloads = DownloadRepository(app)
     /** Process-wide self-updater (see [com.voluene.monobrowser.update.UpdateManager]). */
@@ -123,6 +126,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
 
     private var nextId = 1L
     private val webViews = HashMap<Long, WebView>()
+    /** The themed context each live WebView was created with (see [PageThemeContext]); removed on destroy. */
+    private val pageContexts = HashMap<WebView, PageThemeContext>()
+    @Volatile private var systemDark: Boolean = app.resources.configuration.uiMode and
+        android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
     private val lastUsed = HashMap<Long, Long>()
     /** Tabs currently showing an error page -> the URL that failed. */
     private val errorUrls = HashMap<Long, String>()
@@ -280,47 +287,6 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     val paletteRequests: kotlinx.coroutines.flow.Flow<Unit> = _paletteRequests.receiveAsFlow()
 
     private var persistJob: Job? = null
-    @Volatile private var pageBackground: Int? = null
-
-    /** Whether new WebViews get the dark context theme, and whether pages without a dark design are darkened. */
-    private var webDark: Boolean = initialWebDark(app)
-    private var webForceDark: Boolean = settingsFile.value.webDarkMode == WebDarkMode.FORCE
-
-    private fun initialWebDark(app: Application): Boolean {
-        val s = settingsFile.value
-        if (s.webDarkMode == WebDarkMode.OFF) return false
-        val systemDark = (app.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
-        return Themes.resolve(s.themeId, s.themeMode, systemDark).dark
-    }
-
-    /**
-     * The app's light/dark appearance (or the setting) changed. A WebView's colour scheme comes from the theme of
-     * the context it was created with, so live normal tabs are rebuilt from their saved state (sleeping tabs pick
-     * it up when they wake). Private tabs cannot be saved and keep their current look until reopened.
-     */
-    fun setWebAppearance(appDark: Boolean) {
-        val mode = settingsFile.value.webDarkMode
-        val dark = appDark && mode != WebDarkMode.OFF
-        val force = dark && mode == WebDarkMode.FORCE
-        if (dark == webDark && force == webForceDark) return
-        val rebuild = dark != webDark
-        webDark = dark
-        webForceDark = force
-        webViews.values.forEach(::applyDarkening)
-        if (!rebuild) return
-        val active = _activeTabId.value
-        val normal = webViews.keys.filter { id -> _tabs.value.any { it.id == id && !it.isPrivate } }
-        normal.forEach(::sleep)
-        if (active in normal) ensureLive(active)
-    }
-
-    private fun applyDarkening(webView: WebView) {
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-            // Some WebView versions report the feature but still refuse the call: never let that break a tab.
-            runCatching { WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, webForceDark) }
-        }
-    }
 
     fun updateSettings(transform: (AppSettings) -> AppSettings) {
         val before = settingsFile.value
@@ -340,6 +306,11 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
             app, downloadReceiver, android.content.IntentFilter(android.app.DownloadManager.ACTION_DOWNLOAD_COMPLETE),
             ContextCompat.RECEIVER_EXPORTED, // sent by the system's download provider
         )
+        // Page theme inputs changed (global mode, darken switch, per-site overrides): restyle every live page.
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(settingsFile.state, siteThemes.state, siteThemes.privateState) { _, _, _ -> }
+                .collect { reapplyPageThemes() }
+        }
         val saved = sessionStore.load()
         if (saved != null) {
             _workspaces.value = saved.workspaces
@@ -552,7 +523,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     fun navigate(id: Long, input: String) {
         val url = UrlUtils.resolveInput(input, settingsFile.value.searchTemplate)?.let(::cleanUrl) ?: return
         errorUrls.remove(id)
-        ensureLive(id, restore = false)?.loadUrl(url)
+        val webView = ensureLive(id, restore = false)
+        applyPageTheme(id, url) // before the load: the new page must start with the right colour scheme
+        webView?.loadUrl(url)
     }
 
     /** Shared or selected text from another app: a URL is opened, anything else is searched, in a new tab. */
@@ -561,7 +534,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         if (UrlUtils.isHttpUrl(url)) newTab(url = url)
     }
 
-    fun goBack(id: Long) { webViews[id]?.goBack() }
+    fun goBack(id: Long) = goHistory(id, -1)
 
     /** One entry of a tab's back / forward list; [steps] is what goBackOrForward needs (negative = back). */
     data class HistoryStep(val steps: Int, val title: String, val url: String)
@@ -580,7 +553,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
 
     fun goBackOrForward(id: Long, steps: Int) {
         val webView = webViews[id] ?: return
-        if (webView.canGoBackOrForward(steps)) webView.goBackOrForward(steps)
+        if (!webView.canGoBackOrForward(steps)) return
+        val history = webView.copyBackForwardList()
+        history.getItemAtIndex(history.currentIndex + steps)?.url?.let { applyPageTheme(id, it) }
+        webView.goBackOrForward(steps)
     }
 
     /** The tab back returns to when [tab] has no history of its own (its opener, if still open), else null. */
@@ -595,12 +571,26 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         closeTab(id)
         switchTo(opener)
     }
-    fun goForward(id: Long) { webViews[id]?.goForward() }
+    fun goForward(id: Long) = goHistory(id, 1)
+
+
+    /** Back / forward: the page theme of the target site is applied before the history entry is shown. */
+    private fun goHistory(id: Long, delta: Int) {
+        val webView = webViews[id] ?: return
+        val history = webView.copyBackForwardList()
+        history.getItemAtIndex(history.currentIndex + delta)?.url?.let { applyPageTheme(id, it) }
+        if (delta < 0) webView.goBack() else webView.goForward()
+    }
     fun stop(id: Long) { webViews[id]?.stopLoading() }
 
     fun reload(id: Long) {
         val failed = errorUrls.remove(id)
-        if (failed != null) webViews[id]?.loadUrl(failed) else webViews[id]?.reload()
+        if (failed != null) {
+            applyPageTheme(id, failed)
+            webViews[id]?.loadUrl(failed)
+        } else {
+            webViews[id]?.reload()
+        }
     }
 
     override fun retryFailedLoad(tabId: Long) = reload(tabId)
@@ -703,8 +693,11 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     private fun createWebView(tab: Tab): WebView {
         // Application context: the WebView outlives the Activity (config changes are handled manually).
         // Dialogs, file choosers and permission requests are routed through [TabUi] / [host] instead.
-        // The context theme decides prefers-color-scheme (and whether algorithmic darkening may apply).
-        val webView = MonoWebView(ContextThemeWrapper(getApplication(), if (webDark) R.style.Theme_MonoBrowser_WebDark else R.style.Theme_MonoBrowser_WebLight))
+        // The page theme (prefers-color-scheme) comes from the theme of this context, not from the browser UI.
+        val pageContext = PageThemeContext(getApplication())
+        pageContext.dark = isPageDark(tab.isPrivate, tab.url)
+        val webView = MonoWebView(pageContext)
+        pageContexts[webView] = pageContext
         webView.keepPlayingInBackground = {
             webMedia.state.value?.let { it.tabId == tab.id && it.playing } == true || _floating.value == tab.id
         }
@@ -734,10 +727,9 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
             }
         }
         if (tab.desktopMode) applyDesktopMode(webView, true)
-        applyDarkening(webView)
+        applyPageTheme(webView, pageContext, pageContext.dark, force = true)
         // Renderers of tabs that are not on screen get a lower priority (the system may reclaim them first).
         webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
-        pageBackground?.let(webView::setBackgroundColor)
         webView.webViewClient = MonoWebViewClient(tab.id, adBlocker, this, this)
         adBlocker.attach(webView) // adblock: cosmetic
         webView.webChromeClient = MonoWebChromeClient(tab.id, this, this)
@@ -789,12 +781,14 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
             webView.clearHistory()
             webView.clearFormData()
         }
+        pageContexts.remove(webView)
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
     }
 
     /** Called after the last private tab is closed. */
     private fun clearPrivateData() {
+        siteThemes.clearPrivate()
         if (privateProfilesSupported) {
             // Deleting a profile requires that no WebView uses it (all private WebViews are destroyed by now).
             runCatching { ProfileStore.getInstance().deleteProfile(PRIVATE_PROFILE) }
@@ -808,6 +802,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         flush()
         webViews.values.forEach { it.destroy() }
         webViews.clear()
+        pageContexts.clear()
         history.close()
     }
 
@@ -989,7 +984,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     /** A tab of the list or the glance (which has the same event plumbing but is not in the list). */
     private fun tab(id: Long): Tab? = _tabs.value.firstOrNull { it.id == id } ?: _glance.value?.takeIf { it.id == id }
 
+    override fun onNavigationRequest(tabId: Long, url: String) = applyPageTheme(tabId, url)
+
     override fun onPageStarted(tabId: Long, url: String) {
+        applyPageTheme(tabId, url)
         if (errorUrls[tabId] != url) errorUrls.remove(tabId)
         pendingBlocked[tabId]?.set(0) // counts of the previous page
         webMedia.clear(tabId) // a new page: the old one's media is gone
@@ -1103,10 +1101,61 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     fun paletteHistory(query: String): List<HistoryEntry> =
         runCatching { if (query.isBlank()) history.recent(limit = 8) else history.suggest(query, limit = 8) }.getOrDefault(emptyList())
 
-    /** Colour shown while a page has not painted yet (matches the theme). */
-    fun setPageBackground(argb: Int) {
-        pageBackground = argb
-        webViews.values.forEach { it.setBackgroundColor(argb) }
+    // --- Page theme (independent of the browser UI theme) ---
+
+    /** System night mode changed (pushed by the UI): restyle pages that follow the system. */
+    fun setSystemDark(dark: Boolean) {
+        if (systemDark == dark) return
+        systemDark = dark
+        reapplyPageThemes()
+    }
+
+    private fun isPageDark(isPrivate: Boolean, url: String?): Boolean {
+        val override = siteThemes.lookup(HostUtils.hostOfUrl(url), forPrivate = isPrivate)
+        return PageThemes.isDark(settingsFile.value.pageThemeMode, systemDark, override)
+    }
+
+    /** Applies [dark] to one WebView: theme of its context, colour shown before the first paint, algorithmic darkening. */
+    private fun applyPageTheme(webView: WebView, context: PageThemeContext, dark: Boolean, force: Boolean = false) {
+        val changed = context.dark != dark
+        context.dark = dark
+        webView.setBackgroundColor(if (dark) PAGE_BACKGROUND_DARK else PAGE_BACKGROUND_LIGHT)
+        // The darkening flag can change without [dark] changing (the "darken pages" setting), so keep it in sync always.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+            val darken = dark && settingsFile.value.darkenPages
+            // Guarded: some WebView versions report the feature but throw UnsupportedOperationException.
+            runCatching {
+                if (WebSettingsCompat.isAlgorithmicDarkeningAllowed(webView.settings) != darken) {
+                    WebSettingsCompat.setAlgorithmicDarkeningAllowed(webView.settings, darken)
+                }
+            }
+        }
+        if (!changed && !force) return
+        // Changing a setting makes WebView recompute its preferences, which re-reads the theme of [context]. The
+        // darkening flag alone does not always change, so flip a harmless one back and forth as well.
+        webView.settings.apply {
+            mediaPlaybackRequiresUserGesture = !mediaPlaybackRequiresUserGesture
+            mediaPlaybackRequiresUserGesture = !mediaPlaybackRequiresUserGesture
+        }
+    }
+
+    /** Re-evaluates the page theme of one tab for the page it shows (or is about to show, [url]). */
+    private fun applyPageTheme(tabId: Long, url: String? = null) {
+        val webView = webViews[tabId] ?: return
+        val context = pageContexts[webView] ?: return
+        val tab = tab(tabId) ?: return
+        applyPageTheme(webView, context, isPageDark(tab.isPrivate, url ?: errorUrls[tabId] ?: tab.url))
+    }
+
+    private fun reapplyPageThemes() {
+        webViews.keys.toList().forEach { applyPageTheme(it) }
+    }
+
+    /** Menu / palette: sets (or with null clears) the page theme of the tab's site; private tabs only change memory. */
+    fun setSiteTheme(tabId: Long, theme: SiteTheme?) {
+        val tab = tab(tabId) ?: return
+        val host = HostUtils.hostOfUrl(errorUrls[tabId] ?: tab.url) ?: return
+        siteThemes.set(host, theme, forPrivate = tab.isPrivate)
     }
 
     // --- Workspaces ---
@@ -1258,6 +1307,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         _glance.value = glance
         val webView = createWebView(glance) // same profile as the source tab, adblock attached like any tab
         webViews[glance.id] = webView
+        applyPageTheme(glance.id, url)
         webView.loadUrl(url)
     }
 
@@ -1897,5 +1947,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         const val THUMBNAIL_WIDTH = 300
         const val BLOCKED_FLUSH_MS = 250L
         const val MAX_THUMBNAILS = 30
+        const val PAGE_BACKGROUND_LIGHT = 0xFFFFFFFF.toInt()
+        const val PAGE_BACKGROUND_DARK = 0xFF000000.toInt()
     }
 }

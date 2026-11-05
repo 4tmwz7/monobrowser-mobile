@@ -60,6 +60,9 @@ android {
 
     buildTypes {
         debug {
+            // Separate package: installs next to the release app instead of replacing it.
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
             buildConfigField("boolean", "UPDATE_CHECKS", debugUpdates.toString())
         }
         release {

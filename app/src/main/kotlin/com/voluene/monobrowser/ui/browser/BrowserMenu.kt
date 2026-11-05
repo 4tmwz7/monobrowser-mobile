@@ -131,7 +131,7 @@ data class MenuInfo(val text: String, val toggleLabel: String? = null, val toggl
  * content so it fits a phone screen without scrolling; it only scrolls (last resort) on very small screens.
  */
 @Composable
-fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Unit, columns: Int = 4, primary: Int = 2 * columns - 1) {
+fun BrowserMenuGrid(tiles: List<MenuTile>, infos: List<MenuInfo>, onDismiss: () -> Unit, columns: Int = 4, primary: Int = 2 * columns - 1) {
     val scheme = MaterialTheme.colorScheme
     // The sheet's bottom corners follow the screen's rounded corners.
     val corners = rememberScreenAwareShape()
@@ -142,7 +142,7 @@ fun BrowserMenuGrid(tiles: List<MenuTile>, info: MenuInfo?, onDismiss: () -> Uni
                 .then(corners.modifier).sheetMotion().clip(corners.shape).background(scheme.background, corners.shape).border(1.dp, scheme.outline, corners.shape)
                 .clickable(enabled = false) {}.navigationBarsPadding(),
         ) {
-            if (info != null) {
+            infos.forEach { info ->
                 Row(
                     Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
