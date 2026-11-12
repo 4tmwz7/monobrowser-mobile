@@ -1,16 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Generated from the desktop icon (32x32 grid) scaled into the 66dp adaptive-icon safe zone: 108/32 grid -> x*2.0625 + 21. -->
+<!-- Generated from the desktop icon (64x64 grid) scaled into the 66dp adaptive-icon safe zone: 108/64 grid -> x*1.03125 + 21. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- themed icon: the artwork silhouette (white square minus the dark square, plus the stroke ring) -->
-    <path
-        android:fillColor="#000000"
-        android:pathData="M25.125,25.125L58.125,25.125L58.125,48.6375L48.6375,48.6375L48.6375,58.125L25.125,58.125Z" />
-    <path
-        android:fillColor="#000000"
-        android:fillType="evenOdd"
-        android:pathData="M48.6375,48.6375L84.1125,48.6375L84.1125,84.1125L48.6375,84.1125ZM51.1125,51.1125L51.1125,81.6375L81.6375,81.6375L81.6375,51.1125Z" />
+    <group
+        android:scaleX="1.03125"
+        android:scaleY="1.03125"
+        android:translateX="21"
+        android:translateY="21">
+        <!-- hatched hard shadow: the band cast 10 units down-right from the tile -->
+        <group>
+            <clip-path android:pathData="M50,4L60,14L60,60L14,60L4,50L50,50Z" />
+            <path
+                android:strokeColor="#000000"
+                android:strokeWidth="2.12"
+                android:pathData="M0,42L22,64M0,36L28,64M0,30L34,64M0,24L40,64M0,18L46,64M0,12L52,64M0,6L58,64M0,0L64,64M6,0L64,58M12,0L64,52M18,0L64,46M24,0L64,40M30,0L64,34M36,0L64,28M42,0L64,22" />
+        </group>
+        <!-- themed icon: the artwork silhouette (tile with the M cut out) -->
+        <path
+            android:fillColor="#000000"
+            android:fillType="evenOdd"
+            android:pathData="M4,4h46v46h-46zM9,44V10h9l9,15l9,-15h9v34h-9V26l-9,15l-9,-15v18z" />
+    </group>
 </vector>
