@@ -5,7 +5,7 @@ A minimalist, strictly monochrome browser for Android: the mobile sibling of [Mo
 - Kotlin, Jetpack Compose and Android System WebView (`androidx.webkit`), with an ad blocker in Rust (adblock-rust over JNI)
 - Black / white / grey and rectangular, light and dark, English and Polish
 - Package `com.voluene.monobrowser`, minSdk 26 (Android 8.0), target SDK 36 (Android 16)
-- Current version: **0.2.0** ([release notes](.github/release-notes/v0.2.0.md))
+- Current version: **0.2.1** ([release notes](.github/release-notes/v0.2.1.md))
 
 ## Contents
 
