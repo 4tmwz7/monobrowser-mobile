@@ -34,6 +34,10 @@ interface TabEvents {
     fun onBlocked(tabId: Long)
     fun onScrolled(tabId: Long, dy: Int, scrollY: Int)
     fun onFindResult(tabId: Long, activeOrdinal: Int, matches: Int)
+    /** The page's icon (favicon) arrived; [url] is the page that reported it. The bitmap belongs to the WebView: copy it. */
+    fun onIcon(tabId: Long, url: String?, icon: Bitmap)
+    /** The page's first content became visible (the WebView has something to show besides a blank view). */
+    fun onPageCommitVisible(tabId: Long) {}
 }
 
 class MonoWebViewClient(
@@ -83,6 +87,7 @@ class MonoWebViewClient(
     // adblock: cosmetic (fallback when the document-start script is unavailable; otherwise a no-op)
     override fun onPageCommitVisible(view: WebView, url: String) {
         injectCosmetic(view, url)
+        events.onPageCommitVisible(tabId)
     }
 
     // adblock: cosmetic
@@ -124,6 +129,10 @@ class MonoWebChromeClient(
     override fun onProgressChanged(view: WebView, newProgress: Int) = events.onProgress(tabId, newProgress)
 
     override fun onReceivedTitle(view: WebView, title: String?) = events.onTitle(tabId, title.orEmpty())
+
+    override fun onReceivedIcon(view: WebView, icon: Bitmap?) {
+        if (icon != null) events.onIcon(tabId, view.url, icon)
+    }
 
     /** Camera/microphone are prompted per origin; every other resource (DRM, MIDI) stays denied. */
     override fun onPermissionRequest(request: PermissionRequest) {

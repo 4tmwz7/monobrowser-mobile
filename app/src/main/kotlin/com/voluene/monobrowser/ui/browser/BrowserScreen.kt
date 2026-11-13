@@ -5,6 +5,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +61,8 @@ import com.voluene.monobrowser.ui.palette.PaletteResult
 import com.voluene.monobrowser.ui.palette.PaletteScreen
 import com.voluene.monobrowser.ui.palette.PaletteTab
 import com.voluene.monobrowser.ui.settings.SettingsScreen
+import com.voluene.monobrowser.settings.MenuId
+import com.voluene.monobrowser.settings.MenuLayout
 import com.voluene.monobrowser.ui.tabs.TabSwitcher
 import com.voluene.monobrowser.util.UrlUtils
 import android.content.ClipboardManager
@@ -69,12 +74,19 @@ import com.voluene.monobrowser.data.TopSite
 import com.voluene.monobrowser.reader.ReaderArticle
 import com.voluene.monobrowser.ui.reader.ReaderScreen
 import com.voluene.monobrowser.ui.start.StartPage
+import com.voluene.monobrowser.ui.start.StartBookmarks
+import com.voluene.monobrowser.ui.start.StartIcons
+import com.voluene.monobrowser.ui.start.StartBackgroundImage
+import com.voluene.monobrowser.settings.StartBackground
+import com.voluene.monobrowser.data.Bookmark
+import com.voluene.monobrowser.data.BookmarkFolder
 import com.voluene.monobrowser.search.SearchSuggestions
 import com.voluene.monobrowser.ui.common.LocalModalScope
 import com.voluene.monobrowser.ui.common.Motion
 import com.voluene.monobrowser.ui.common.Presence
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
@@ -89,11 +101,12 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import com.voluene.monobrowser.ui.common.PredictiveBackContainer
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
-private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes, Reader, ReadingList }
+private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Bookmarks, Palette, Notes, Reader, ReadingList, StartPicker }
 
 /**
  * Overlay transitions (Material 3 emphasized easing, springs where something lands):
@@ -103,11 +116,11 @@ private enum class Overlay { None, Tabs, Menu, History, Downloads, Settings, Boo
  * - the menu is a sheet: its scrim and panel animate themselves (see [ModalScope]), so it is not faded as a whole.
  * Everything animates the graphics layer only (no relayout per frame), so it runs at the display's refresh rate.
  */
-private fun AnimatedContentTransitionScope<Overlay>.overlayTransition(from: Overlay, to: Overlay, barTop: Boolean, intoTab: Boolean): ContentTransform {
+private fun AnimatedContentTransitionScope<Overlay>.overlayTransition(from: Overlay, to: Overlay, barTop: Boolean, intoTab: Boolean, fromPull: Boolean = false): ContentTransform {
     val counter = TransformOrigin(0.93f, if (barTop) 0.04f else 0.96f)
     val enter = when (to) {
         Overlay.None, Overlay.Menu -> EnterTransition.None
-        Overlay.Tabs -> fadeIn(Motion.enterTween(200)) + scaleIn(Motion.scaleSpring, initialScale = 0.82f, transformOrigin = counter)
+        Overlay.Tabs -> if (fromPull) EnterTransition.None else fadeIn(Motion.enterTween(200)) + scaleIn(Motion.scaleSpring, initialScale = 0.82f, transformOrigin = counter)
         Overlay.Palette -> fadeIn(Motion.enterTween(Motion.FADE_IN_MS)) +
             slideInVertically(Motion.slideSpring) { h -> if (barTop) -h / 14 else h / 14 }
         Overlay.Reader -> fadeIn(Motion.enterTween(Motion.FADE_IN_MS)) + slideInVertically(Motion.slideSpring) { it / 8 }
@@ -145,6 +158,8 @@ fun BrowserScreen(manager: TabManager) {
     val currentWorkspaceId by manager.currentWorkspaceId.collectAsState()
     val glance by manager.glance.collectAsState()
     val thumbnails by manager.thumbnails.collectAsState()
+    // Sharper previews for the page swipe (a tab grid preview is the fallback when a tab has none).
+    val previews by manager.previews.collectAsState()
     val readingItems by manager.readingList.items.collectAsState()
     val message by manager.message.collectAsState()
     val fullScreen by manager.fullScreen.collectAsState()
@@ -162,6 +177,8 @@ fun BrowserScreen(manager: TabManager) {
     val loadProgress = manager.loadProgress.collectAsState()
     val linkMenu by manager.linkMenu.collectAsState()
     val tab = tabs.firstOrNull { it.id == activeId } ?: return
+    // The sideways swipe of the address bar: the page slides with the bar, so the screen owns its state.
+    val swipe = rememberBarSwipeState(tab.id)
     var overlay by remember { mutableStateOf(Overlay.None) }
     // The tab grid closes by zooming into the picked tab (instead of back into the counter).
     var tabPicked by remember { mutableStateOf(false) }
@@ -176,6 +193,10 @@ fun BrowserScreen(manager: TabManager) {
     var textSizeOpen by remember { mutableStateOf(false) }
     var addressMenuOpen by remember { mutableStateOf(false) }
     var siteOptions by remember { mutableStateOf<TopSite?>(null) }
+    var startBookmarkOptions by remember { mutableStateOf<Bookmark?>(null) }
+    var startFolderOptions by remember { mutableStateOf<BookmarkFolder?>(null) }
+    /** Folder the bookmarks screen opens in (a folder tile of the start page). */
+    var bookmarksFolder by remember { mutableStateOf<Long?>(null) }
     var siteInfo by remember { mutableStateOf<TabManager.SiteInfo?>(null) }
     var historySteps by remember { mutableStateOf<List<TabManager.HistoryStep>?>(null) }
     var pageThemeDialog by remember { mutableStateOf(false) }
@@ -205,6 +226,8 @@ fun BrowserScreen(manager: TabManager) {
     BackHandler(enabled = linkMenu != null) { manager.dismissLinkMenu() }
     BackHandler(enabled = addressMenuOpen) { addressMenuOpen = false }
     BackHandler(enabled = siteOptions != null) { siteOptions = null }
+    BackHandler(enabled = startBookmarkOptions != null) { startBookmarkOptions = null }
+    BackHandler(enabled = startFolderOptions != null) { startFolderOptions = null }
     BackHandler(enabled = textSizeOpen) { textSizeOpen = false }
     BackHandler(enabled = siteInfo != null) { siteInfo = null }
     BackHandler(enabled = historySteps != null) { historySteps = null }
@@ -285,36 +308,33 @@ fun BrowserScreen(manager: TabManager) {
 
     // Built only while the menu / palette is open (not on every progress tick of the page).
     // The first seven are the two rows always shown (with "More"); the rest unfolds below.
-    val menuTiles: @Composable () -> List<MenuTile> = { listOfNotNull(
-        MenuTile(R.string.tab_new, Icons.Filled.Add) { manager.openNewTab() },
-        MenuTile(R.string.menu_new_private_short, Icons.Filled.Lock) { manager.openNewTab(isPrivate = true) },
-        MenuTile(R.string.menu_bookmarks, MenuIcons.Bookmark) { overlay = Overlay.Bookmarks },
-        MenuTile(
-            if (bookmarked) R.string.menu_bookmark_remove else R.string.menu_bookmark_add,
-            if (bookmarked) Icons.Filled.Star else MenuIcons.StarOutline, enabled = isWeb && !tab.isPrivate, active = bookmarked,
-        ) { manager.toggleBookmark(tab.id) },
-        MenuTile(R.string.menu_history, Icons.Filled.DateRange) { overlay = Overlay.History },
-        // While a video plays here, its floating window is one of the main tiles (share moves down).
-        if (manager.canFloatVideo()) {
-            MenuTile(R.string.menu_pip, MenuIcons.PictureInPicture) { manager.floatVideo() }
-        } else {
-            MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() }
-        },
-        MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
-        // --- More ---
-        MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() }.takeIf { manager.canFloatVideo() },
-        MenuTile(R.string.menu_find, Icons.Filled.Search, enabled = isWeb) { manager.openFind() },
-        MenuTile(R.string.menu_downloads, MenuIcons.Download) { overlay = Overlay.Downloads },
-        MenuTile(R.string.menu_reader, MenuIcons.Article, enabled = isWeb && !tab.isLoading) { openReader() },
-        MenuTile(R.string.menu_reopen_short, MenuIcons.Restore, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
-        MenuTile(R.string.menu_notes, Icons.Filled.Edit) { openNotes(newNote = false) },
-        // Watching a video, "share" moved here and "add to note" makes room (the grid stays 2 + 2 rows).
-        MenuTile(R.string.menu_note_add_short, Icons.Filled.List, enabled = isWeb && !tab.isPrivate) { manager.addPageToNote(tab.id) }
-            .takeIf { !manager.canFloatVideo() },
-        MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
-        MenuTile(R.string.menu_page_theme, MenuIcons.Contrast, enabled = isWeb && siteHost != null) { pageThemeDialog = true },
-        // Print / PDF: "/drukuj" or "/print" in the address bar.
-    ) }
+    val menuTiles: @Composable () -> List<MenuTile> = {
+        // Every entry has a stable id; the user's order and hidden set decide what is shown (Settings -> Menu).
+        // Context-dependent entries keep their conditions (picture in picture only while a video plays).
+        val all: Map<MenuId, MenuTile?> = mapOf(
+            MenuId.NEW_TAB to MenuTile(R.string.tab_new, Icons.Filled.Add) { manager.openNewTab() },
+            MenuId.NEW_PRIVATE_TAB to MenuTile(R.string.menu_new_private_short, Icons.Filled.Lock) { manager.openNewTab(isPrivate = true) },
+            MenuId.BOOKMARKS to MenuTile(R.string.menu_bookmarks, MenuIcons.Bookmark) { overlay = Overlay.Bookmarks },
+            MenuId.BOOKMARK_TOGGLE to MenuTile(
+                if (bookmarked) R.string.menu_bookmark_remove else R.string.menu_bookmark_add,
+                if (bookmarked) Icons.Filled.Star else MenuIcons.StarOutline, enabled = isWeb && !tab.isPrivate, active = bookmarked,
+            ) { manager.toggleBookmark(tab.id) },
+            MenuId.HISTORY to MenuTile(R.string.menu_history, Icons.Filled.DateRange) { overlay = Overlay.History },
+            MenuId.PICTURE_IN_PICTURE to if (manager.canFloatVideo()) MenuTile(R.string.menu_pip, MenuIcons.PictureInPicture) { manager.floatVideo() } else null,
+            MenuId.SHARE to MenuTile(R.string.menu_share, Icons.Filled.Share, enabled = isWeb) { shareLink() },
+            MenuId.SETTINGS to MenuTile(R.string.menu_settings, Icons.Filled.Settings) { overlay = Overlay.Settings },
+            MenuId.FIND to MenuTile(R.string.menu_find, Icons.Filled.Search, enabled = isWeb) { manager.openFind() },
+            MenuId.DOWNLOADS to MenuTile(R.string.menu_downloads, MenuIcons.Download) { overlay = Overlay.Downloads },
+            MenuId.READER to MenuTile(R.string.menu_reader, MenuIcons.Article, enabled = isWeb && !tab.isLoading) { openReader() },
+            MenuId.REOPEN_CLOSED to MenuTile(R.string.menu_reopen_short, MenuIcons.Restore, enabled = recentlyClosed.isNotEmpty()) { manager.reopenClosedTab() },
+            MenuId.NOTES to MenuTile(R.string.menu_notes, Icons.Filled.Edit) { openNotes(newNote = false) },
+            MenuId.NOTE_ADD to MenuTile(R.string.menu_note_add_short, Icons.Filled.List, enabled = isWeb && !tab.isPrivate) { manager.addPageToNote(tab.id) },
+            MenuId.DESKTOP_SITE to MenuTile(R.string.menu_desktop_site, MenuIcons.Desktop, enabled = isWeb, active = tab.desktopMode) { manager.toggleDesktopMode(tab.id) },
+            MenuId.PAGE_THEME to MenuTile(R.string.menu_page_theme, MenuIcons.Contrast, enabled = isWeb && siteHost != null) { pageThemeDialog = true },
+            // Print / PDF: "/drukuj" or "/print" in the address bar.
+        )
+        MenuLayout.visible(settings.menuOrder, settings.menuHidden).mapNotNull { all[it] }
+    }
     val menuInfo: @Composable () -> List<MenuInfo> = { buildList {
         when {
             !isWeb -> Unit
@@ -455,8 +475,148 @@ fun BrowserScreen(manager: TabManager) {
         value = if (showStart && settings.showTopSites && !tab.isPrivate) withContext(Dispatchers.IO) { manager.topSites() } else value
     }
 
+    // Neighbours of the active tab in the current workspace (their bars slide in while the address bar is swiped).
+    val barNeighbours = remember(workspaceTabs, activeId) {
+        val index = workspaceTabs.indexOfFirst { it.id == activeId }
+        workspaceTabs.getOrNull(index - 1).takeIf { index > 0 } to workspaceTabs.getOrNull(index + 1).takeIf { index >= 0 }
+    }
+    // Other tabs' pages while the bar is swiped: previews already in memory (never a live WebView), the site's page theme.
+    // The sharper swipe previews come first; the tab grid's small ones are the fallback (and all there is for tabs
+    // that were not active recently).
+    val pagePreviews = remember(thumbnails, previews, settings.pageThemeMode, systemDark, siteThemesNormal, siteThemesPrivate) {
+        PagePreviews(
+            thumbnail = { id -> previews[id] ?: thumbnails[id] },
+            pageDark = { t ->
+                val host = HostUtils.hostOfUrl(t.url)
+                val override = if (host != null) SiteThemes.find(host, if (t.isPrivate) siteThemesPrivate else siteThemesNormal)?.second else null
+                PageThemes.isDark(settings.pageThemeMode, systemDark, override)
+            },
+        )
+    }
+    val tabSwitcher: @Composable () -> Unit = {
+        TabSwitcher(
+                tabs = workspaceTabs,
+                activeId = activeId,
+                canReopen = recentlyClosed.isNotEmpty(),
+                onSwitch = { manager.switchTo(it); tabPicked = true; overlay = Overlay.None },
+                onClose = manager::closeTab,
+                onNewTab = { manager.openNewTab(); overlay = Overlay.None },
+                onNewPrivateTab = { manager.openNewTab(isPrivate = true); overlay = Overlay.None },
+                onReopen = { manager.reopenClosedTab(); overlay = Overlay.None },
+                onSetNeverSleep = manager::setNeverSleep,
+                workspaces = workspaceState,
+                onSwitchWorkspace = manager::switchWorkspace,
+                onCreateWorkspace = { name, icon -> manager.createWorkspace(name, icon) },
+                onEditWorkspace = { id, name, icon -> manager.updateWorkspace(id, name, icon) },
+                onMoveWorkspace = manager::moveWorkspace,
+                onDeleteWorkspace = manager::deleteWorkspace,
+                onMoveTabToWorkspace = manager::moveTabToWorkspace,
+                onUndoClose = { manager.undoCloseTab() },
+                onCloseAll = { manager.closeAllTabs() },
+                thumbnails = thumbnails,
+                onDismiss = { overlay = Overlay.None },
+            )
+    }
+
+    // Pulling the address bar towards the page slides the (opaque) tab list in from the bar's edge, 1:1 with the finger:
+    // a non-interactive copy is drawn until the release, then the real overlay takes over without a second entrance.
+    // pullProgress has one writer at a time: the drag, or the release animation (cancelled when a new drag begins).
+    var fromPull by remember { mutableStateOf(false) }
+    val pullProgress = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var pullShown by remember { mutableStateOf(false) }
+    val pullEpoch = remember { intArrayOf(0) }
+    val pullActive = remember { booleanArrayOf(false) }
+    val pullBase = remember { floatArrayOf(0f) }
+    val pullJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    val currentTabId by androidx.compose.runtime.rememberUpdatedState(tab.id)
+    val currentOverlay by androidx.compose.runtime.rememberUpdatedState(overlay)
+    val pullDistance = TabsPullMath.distance(with(androidx.compose.ui.platform.LocalDensity.current) { configuration.screenHeightDp.dp.toPx() })
+    val tabsPull = remember(manager, scope) {
+        TabsPull(
+            onDrag = { p ->
+                if (currentOverlay == Overlay.None) {
+                    if (!pullActive[0] && p > 0f) {
+                        // A new drag takes over from a running release animation (and from where it left the list).
+                        pullJob[0]?.cancel()
+                        pullJob[0] = null
+                        pullActive[0] = true
+                        pullBase[0] = if (pullShown) pullProgress.floatValue else 0f
+                        if (!pullShown) {
+                            val epoch = ++pullEpoch[0]
+                            // The page is copied before the list covers it; the list appears when the copy is done.
+                            manager.captureThumbnail(currentTabId) { if (pullActive[0] && pullEpoch[0] == epoch) pullShown = true }
+                        }
+                    }
+                    if (pullActive[0]) pullProgress.floatValue = (pullBase[0] + p).coerceIn(0f, 1f)
+                }
+            },
+            onRelease = { open, velocity ->
+                if (pullActive[0]) {
+                    pullActive[0] = false
+                    pullJob[0] = scope.launch {
+                        try {
+                            val spec = androidx.compose.animation.core.spring<Float>(dampingRatio = 1f, stiffness = 500f)
+                            androidx.compose.animation.core.animate(
+                                pullProgress.floatValue, if (open) 1f else 0f, velocity / pullDistance.coerceAtLeast(1f), spec,
+                            ) { v, _ -> pullProgress.floatValue = v }
+                            if (open) {
+                                fromPull = pullShown
+                                if (currentOverlay == Overlay.None) overlay = Overlay.Tabs
+                            }
+                        } finally {
+                            // The list is gone in every outcome (also when the animation was cancelled).
+                            pullShown = false
+                            pullProgress.floatValue = 0f
+                        }
+                    }
+                }
+            },
+            // True while a pull runs or its release animation is still moving the list: the bar's sideways swipe
+            // must not start meanwhile (two animations over the same page would fight) - like a pull does not
+            // start while a swipe is settling (BarSwipeState.busy).
+            busy = { pullActive[0] || pullJob[0]?.isActive == true },
+        )
+    }
+    // While the bar swipe slides the neighbour's page in, the capture of the departing page inserts into the preview
+    // maps: the neighbour's previews must not be evicted meanwhile, so the screen marks it for TabManager. The side
+    // is read as a flow (it changes a few times per gesture; the offset itself never leaves the draw phase).
+    val currentNeighbours by androidx.compose.runtime.rememberUpdatedState(barNeighbours)
+    LaunchedEffect(swipe) {
+        try {
+            snapshotFlow { swipe.shownSide(currentTabId) }.collect { side ->
+                manager.protectedPreviewId = when (side) {
+                    0 -> null
+                    -1 -> currentNeighbours.second?.id // dragged left: the next tab slides in from the right
+                    else -> currentNeighbours.first?.id
+                }
+            }
+        } finally {
+            manager.protectedPreviewId = null
+        }
+    }
+    LaunchedEffect(overlay) { if (overlay == Overlay.None) { fromPull = false; bookmarksFolder = null } }
+    // Moving the bar rebuilds its gesture handler: a pull cut off without a release must not leave the list copy up.
+    LaunchedEffect(toolbarTop) { pullJob[0]?.cancel(); pullActive[0] = false; pullShown = false; pullProgress.floatValue = 0f }
+    val startBookmarks = remember(bookmarks, settings.showStartBookmarks) {
+        if (settings.showStartBookmarks) StartBookmarks(BookmarkOps.startContent(bookmarks), bookmarks.bookmarks.isNotEmpty() || bookmarks.folders.isNotEmpty()) else null
+    }
+    val startIcons = remember(settings.showFavicons, settings.faviconsGrayscale) {
+        StartIcons(manager.favicons, settings.showFavicons, settings.faviconsGrayscale)
+    }
+    // The background is decoded once (the store keeps it); the start page only gets it for normal tabs.
+    val backgroundWanted = showStart && !tab.isPrivate && settings.startBackground > 0
+    val backgroundBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(manager.startBackground.peek(settings.startBackground), backgroundWanted, settings.startBackground) {
+        value = if (backgroundWanted) withContext(Dispatchers.IO) { manager.startBackground.load(settings.startBackground) } else value
+    }
+    val startBackgroundImage = backgroundBitmap?.takeIf { settings.startBackground > 0 }?.let {
+        StartBackgroundImage(it, StartBackground.overlayAlpha(settings.startBackgroundDim), settings.startBackgroundGrayscale)
+    }
+    // Bottom bar: the start page's picture reaches under the status bar (the page keeps its own top padding).
+    // With the top bar the status strip belongs to the bar, so the picture stays below it.
+    val pictureUnderStatusBar = showStart && !toolbarTop && !tab.isPrivate && startBackgroundImage != null && !pip
     val barVisible = !barHidden || overlay != Overlay.None || showStart
     val barBg = if (tab.isPrivate) scheme.onBackground else scheme.background
+    val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { SWIPE_GAP.toPx() }
 
     Box(Modifier.fillMaxSize().background(scheme.background)) {
         // The tab whose media plays (or is paused, to be resumed from the notification) while another tab is shown
@@ -478,7 +638,8 @@ fun BrowserScreen(manager: TabManager) {
                         onSiteInfo = { siteInfo = manager.siteInfo(tab.id) },
                         onHistory = { forward -> historySteps = manager.navigationHistory(tab.id, forward).takeIf { it.isNotEmpty() } },
                         fullAddress = settings.showFullAddress,
-                        loadProgress = { loadProgress.value[tab.id] ?: tab.progress },
+                        loadProgress = { t -> loadProgress.value[t.id] ?: t.progress },
+                        neighbourBookmarked = { t -> UrlUtils.isHttpUrl(t.url) && BookmarkOps.findByUrl(bookmarks, t.url) != null },
                         onReader = ::openReader,
                         onBack = { manager.goBack(tab.id) },
                         onForward = { manager.goForward(tab.id) },
@@ -487,43 +648,87 @@ fun BrowserScreen(manager: TabManager) {
                         // Copy the page as it is right now (one GPU frame), then show the grid.
                         onTabs = { manager.captureThumbnail(tab.id) { overlay = Overlay.Tabs } },
                         onNewTab = { manager.openNewTab() },
-                        onSwipeTab = manager::switchRelative,
+                        // The page is slid away when the switch happens: the tab being left keeps the thumbnail taken
+                        // when the swipe began (see onSwipeStart) instead of copying the neighbour from the screen.
+                        onSwipeTab = { delta -> manager.withoutLeaveCapture { manager.switchRelative(delta) } },
+                        onSwipeNewTab = { manager.withoutLeaveCapture { manager.openNewTab() } },
+                        swipe = swipe,
+                        // A finger on the bar may start a swipe: the page that will slide away is copied while it is in place.
+                        onBarTouch = { manager.captureThumbnail(tab.id) },
+                        tabsPull = tabsPull,
+                        previousTab = barNeighbours.first,
+                        nextTab = barNeighbours.second,
+                        items = remember(settings.barItems) { settings.barLayout },
+                        bookmarked = bookmarked,
+                        onBookmarks = { overlay = Overlay.Bookmarks },
+                        onToggleBookmark = { manager.toggleBookmark(tab.id) },
+                        onShare = ::shareLink,
                     )
                 }
             }
             if (toolbarTop && !pip) {
-                // The status-bar strip stays in the bar's colour when the bar slides away.
-                Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(barBg))
+                // The status strip is part of the bar's sliding layer: it slides away with the bar, and the
+                // neighbour's strip slides in beside it in the neighbour's colour - while the bars swap, nothing
+                // stays in the colour of the tab that is leaving.
+                // Both strips share ONE slot of this column (stacked in a Box): a second column child would push the
+                // bar and the page down by the status-bar height for as long as the swipe lasts.
+                Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)) {
+                    Box(Modifier.fillMaxSize().graphicsLayer { translationX = swipe.shownOffset(tab.id) }.background(barBg))
+                    val side = swipe.shownSide(tab.id)
+                    val incoming = BarSwipe.incoming(side, barNeighbours.first != null, barNeighbours.second != null)
+                    if (incoming != BarSwipe.Incoming.NONE) {
+                        val shown = if (incoming == BarSwipe.Incoming.CARD) (if (side < 0) barNeighbours.second else barNeighbours.first) else null
+                        Box(
+                            Modifier.fillMaxSize()
+                                .graphicsLayer { translationX = BarSwipe.neighbourX(swipe.shownOffset(tab.id), swipe.width, gapPx) }
+                                .background(if (shown?.isPrivate == true) scheme.onBackground else scheme.background),
+                        )
+                    }
+                }
                 bar()
             }
             // The page area ends where the bar starts, so overlays aligned to its bottom sit right above the bar.
-            Box(Modifier.weight(1f).fillMaxWidth().then(if (pip) Modifier else if (toolbarTop) Modifier.navigationBarsPadding() else Modifier.statusBarsPadding())) {
-                WebViewHost(
-                    webView = manager.webViewFor(tab.id),
-                    onRefresh = { manager.reload(tab.id) },
-                    lineAtBottom = !toolbarTop,
-                    modifier = if (pipPage != null && floatingId == null) Modifier.scaledPage(pipPage) else Modifier,
-                )
-                if (showStart) {
-                    StartPage(
-                        isPrivate = tab.isPrivate,
-                        topSites = topSites,
-                        showTopSites = settings.showTopSites,
-                        recentlyClosed = if (tab.isPrivate) emptyList() else recentlyClosed,
-                        readingList = if (tab.isPrivate) emptyList() else readingItems,
-                        onOpenSaved = ::openSaved,
-                        onShowReadingList = { overlay = Overlay.ReadingList },
-                        onSearch = { overlay = Overlay.Palette },
-                        onOpen = { manager.navigate(tab.id, it) },
-                        onSiteOptions = { siteOptions = it },
-                        onReopen = { manager.reopenClosedIn(tab.id, it) },
+            Box(Modifier.weight(1f).fillMaxWidth().then(if (pip) Modifier else if (toolbarTop) Modifier.navigationBarsPadding() else if (pictureUnderStatusBar) Modifier else Modifier.statusBarsPadding())) {
+                // The page (and the start page) slides with the address bar; the neighbour's preview comes in beside it.
+                Box(Modifier.fillMaxSize().graphicsLayer { translationX = swipe.shownOffset(tab.id) }) {
+                    WebViewHost(
+                        webView = manager.webViewFor(tab.id),
+                        onRefresh = { manager.reload(tab.id) },
+                        lineAtBottom = !toolbarTop,
+                        modifier = if (pipPage != null && floatingId == null) Modifier.scaledPage(pipPage) else Modifier,
                     )
+                    if (showStart) {
+                        StartPage(
+                            isPrivate = tab.isPrivate,
+                            topSites = topSites,
+                            showTopSites = settings.showTopSites,
+                            recentlyClosed = if (tab.isPrivate) emptyList() else recentlyClosed,
+                            readingList = if (tab.isPrivate) emptyList() else readingItems,
+                            onOpenSaved = ::openSaved,
+                            onShowReadingList = { overlay = Overlay.ReadingList },
+                            onSearch = { overlay = Overlay.Palette },
+                            onOpen = { manager.navigate(tab.id, it) },
+                            onSiteOptions = { siteOptions = it },
+                            bookmarks = startBookmarks,
+                            onBookmarkOptions = { startBookmarkOptions = it },
+                            onFolderOptions = { startFolderOptions = it },
+                            onOpenFolder = { bookmarksFolder = it.id; overlay = Overlay.Bookmarks },
+                            onPickBookmarks = { overlay = Overlay.StartPicker },
+                            icons = startIcons,
+                            background = startBackgroundImage,
+                            underStatusBar = pictureUnderStatusBar,
+                            onReopen = { manager.reopenClosedIn(tab.id, it) },
+                        )
+                    }
+                    PageCoverLayer(swipe, tab, pagePreviews, manager.pageVisible)
                 }
+                PageNeighbour(swipe, tab.id, barNeighbours.first, barNeighbours.second, pagePreviews, gapPx)
                 if (manager.updater.enabled) {
                     UpdateBanner(
                         updater = manager.updater,
                         onOpenUrl = { manager.newTab(url = it) },
-                        modifier = Modifier.align(if (toolbarTop) Alignment.BottomCenter else Alignment.TopCenter).padding(8.dp).widthIn(max = 480.dp),
+                        modifier = Modifier.align(if (toolbarTop) Alignment.BottomCenter else Alignment.TopCenter)
+                            .then(if (pictureUnderStatusBar) Modifier.statusBarsPadding() else Modifier).padding(8.dp).widthIn(max = 480.dp),
                     )
                 }
                 run {
@@ -551,7 +756,7 @@ fun BrowserScreen(manager: TabManager) {
         // Full-screen overlays (and the menu sheet) follow the predictive back gesture.
         AnimatedContent(
             targetState = overlay,
-            transitionSpec = { overlayTransition(initialState, targetState, toolbarTop, tabPicked) },
+            transitionSpec = { overlayTransition(initialState, targetState, toolbarTop, tabPicked, fromPull) },
             contentAlignment = Alignment.BottomCenter,
             label = "overlay",
         ) { shown ->
@@ -566,28 +771,7 @@ fun BrowserScreen(manager: TabManager) {
         when (shown) {
             Overlay.None -> Unit
             Overlay.Menu -> Unit
-            Overlay.Tabs -> TabSwitcher(
-                tabs = workspaceTabs,
-                activeId = activeId,
-                canReopen = recentlyClosed.isNotEmpty(),
-                onSwitch = { manager.switchTo(it); tabPicked = true; overlay = Overlay.None },
-                onClose = manager::closeTab,
-                onNewTab = { manager.openNewTab(); overlay = Overlay.None },
-                onNewPrivateTab = { manager.openNewTab(isPrivate = true); overlay = Overlay.None },
-                onReopen = { manager.reopenClosedTab(); overlay = Overlay.None },
-                onSetNeverSleep = manager::setNeverSleep,
-                workspaces = workspaceState,
-                onSwitchWorkspace = manager::switchWorkspace,
-                onCreateWorkspace = { name, icon -> manager.createWorkspace(name, icon) },
-                onEditWorkspace = { id, name, icon -> manager.updateWorkspace(id, name, icon) },
-                onMoveWorkspace = manager::moveWorkspace,
-                onDeleteWorkspace = manager::deleteWorkspace,
-                onMoveTabToWorkspace = manager::moveTabToWorkspace,
-                onUndoClose = { manager.undoCloseTab() },
-                onCloseAll = { manager.closeAllTabs() },
-                thumbnails = thumbnails,
-                onDismiss = { overlay = Overlay.None },
-            )
+            Overlay.Tabs -> tabSwitcher()
             Overlay.History -> HistoryScreen(
                 history = manager.history,
                 onOpen = { manager.navigate(tab.id, it); overlay = Overlay.None },
@@ -599,8 +783,14 @@ fun BrowserScreen(manager: TabManager) {
                 onOpenUrl = { manager.newTab(url = it); overlay = Overlay.None },
                 onClose = { overlay = Overlay.None },
             )
+            Overlay.StartPicker -> com.voluene.monobrowser.ui.start.StartBookmarksPicker(
+                data = bookmarks,
+                onEdit = manager::editBookmarks,
+                onClose = { overlay = Overlay.None },
+            )
             Overlay.Bookmarks -> BookmarksScreen(
                 data = bookmarks,
+                initialFolderId = bookmarksFolder,
                 host = { manager.host },
                 onEdit = manager::editBookmarks,
                 onOpen = { url, newTab ->
@@ -684,6 +874,25 @@ fun BrowserScreen(manager: TabManager) {
             }
         }
         } }
+        if (pullShown) {
+            // The list slides in from the bar's edge with the finger (opaque; the page below dims a little). It is
+            // not interactive: touches are swallowed until the real overlay takes over.
+            Box(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() }
+                    }
+                },
+            ) {
+                Box(Modifier.fillMaxSize().drawBehind { drawRect(Color.Black.copy(alpha = 0.35f * pullProgress.floatValue)) })
+                Box(
+                    // graphicsLayer first: the opaque background has to slide with the list, not cover the page.
+                    Modifier.fillMaxSize().graphicsLayer {
+                        translationY = (1f - pullProgress.floatValue) * size.height * (if (toolbarTop) -1f else 1f)
+                    }.background(scheme.background),
+                ) { tabSwitcher() }
+            }
+        }
         Presence(linkMenu) { state ->
             val entries = LinkActions.menu(state.url, state.sourceIsPrivate).map { action ->
                 MenuEntry(linkMenuLabel(action)) { if (action == LinkMenuAction.SHARE) shareText(state.url) else manager.runLinkAction(state, action) }
@@ -715,6 +924,21 @@ fun BrowserScreen(manager: TabManager) {
                 },
             )
             BrowserMenu(entries, onDismiss = { siteOptions = null }, header = site.host)
+        }
+        Presence(startBookmarkOptions) { b ->
+            val entries = listOf(
+                MenuEntry(R.string.link_open_tab) { manager.newTab(url = b.url) },
+                MenuEntry(R.string.link_copy) { manager.copyToClipboard(b.url) },
+                MenuEntry(R.string.start_remove_from_start) { manager.editBookmarks { BookmarkOps.removeFromStart(it, b.id) } },
+            )
+            BrowserMenu(entries, onDismiss = { startBookmarkOptions = null }, header = b.title.ifBlank { UrlUtils.shortUrlLabel(b.url) })
+        }
+        Presence(startFolderOptions) { f ->
+            val entries = listOf(
+                MenuEntry(R.string.start_open_folder) { bookmarksFolder = f.id; overlay = Overlay.Bookmarks },
+                MenuEntry(R.string.start_remove_from_start) { manager.editBookmarks { BookmarkOps.removeFromStart(it, f.id) } },
+            )
+            BrowserMenu(entries, onDismiss = { startFolderOptions = null }, header = f.name)
         }
         Presence(historySteps) { steps ->
             val entries = steps.map { step ->

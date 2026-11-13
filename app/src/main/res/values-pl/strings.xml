@@ -131,7 +131,12 @@
     <string name="bookmarks_up">W górę</string>
     <string name="bookmarks_empty">Brak zakładek. Dodaj bieżącą stronę z menu lub zaimportuj plik.</string>
     <string name="bookmarks_folder_empty">Ten folder jest pusty</string>
-    <string name="bookmarks_folder_count">Elementów: %1$d</string>
+    <plurals name="bookmarks_folder_count">
+        <item quantity="one">%1$d pozycja</item>
+        <item quantity="few">%1$d pozycje</item>
+        <item quantity="many">%1$d pozycji</item>
+        <item quantity="other">%1$d pozycji</item>
+    </plurals>
     <string name="bookmarks_folder_name">Nazwa folderu</string>
     <string name="bookmarks_import_failed">Nie udało się wczytać tego pliku</string>
     <string name="bookmarks_import_done">Zaimportowano zakładek: %1$d (pominięto: %2$d)</string>
@@ -155,11 +160,23 @@
 
     <!-- Settings -->
     <string name="settings_title">Ustawienia</string>
-    <string name="settings_section_general">Ogólne</string>
-    <string name="settings_section_appearance">Wygląd</string>
-    <string name="settings_section_privacy">Prywatność i bezpieczeństwo</string>
     <string name="settings_section_adblock">Adblock</string>
-    <string name="settings_section_about">O programie</string>
+    <string name="settings_cat_general">Ogólne</string>
+    <string name="settings_cat_general_hint">Wyszukiwarka, start, język</string>
+    <string name="settings_cat_start">Strona startowa</string>
+    <string name="settings_cat_start_hint">Nowa karta, najczęstsze witryny, tło</string>
+    <string name="settings_cat_appearance">Wygląd</string>
+    <string name="settings_cat_appearance_hint">Motyw, położenie i układ paska</string>
+    <string name="settings_cat_tabs">Karty i gesty</string>
+    <string name="settings_cat_tabs_hint">Przytrzymanie linku, gesty, skróty</string>
+    <string name="settings_cat_pages">Strony</string>
+    <string name="settings_cat_pages_hint">Motyw stron, rozmiar tekstu, wideo</string>
+    <string name="settings_cat_privacy">Prywatność i blokowanie</string>
+    <string name="settings_cat_privacy_hint">Blokowanie, wyjątki, uprawnienia, dane</string>
+    <string name="settings_cat_sync">Synchronizacja</string>
+    <string name="settings_cat_sync_hint">Zakładki, lista i notatki w pliku</string>
+    <string name="settings_cat_about">O aplikacji i aktualizacje</string>
+    <string name="settings_cat_about_hint">Wersja, aktualizacje, licencje, strona</string>
     <string name="settings_search_engine">Wyszukiwarka</string>
     <string name="settings_engine_custom">Własna</string>
     <string name="settings_custom_url">Własny adres wyszukiwania</string>
@@ -526,4 +543,52 @@
     <string name="settings_site_themes_hint">Na tych witrynach (i ich subdomenach) motyw strony jest stały, niezależnie od ustawienia motywu stron.</string>
     <string name="settings_site_themes_empty">Brak witryn. Ustaw z menu \u22EE na stronie.</string>
     <string name="menu_page_theme">Motyw strony</string>
+
+    <!-- start page bookmarks, address bar and menu layout, favicons, background -->
+    <string name="editor_move_up">W górę</string>
+    <string name="editor_move_down">W dół</string>
+    <string name="editor_restore_defaults">Przywróć domyślne</string>
+    <string name="bar_item_address">Pole adresu</string>
+    <string name="bar_item_tabs">Licznik kart</string>
+    <string name="settings_bar_layout">Układ paska adresu</string>
+    <string name="settings_bar_layout_hint">Wybierz, co pokazuje pasek i w jakiej kolejności. Pole adresu i menu zawsze zostają; zmieści się najwyżej %1$d przycisków.</string>
+    <string name="settings_menu_layout">Układ menu</string>
+    <string name="settings_menu_layout_hint">Wybierz, które pozycje pokazuje menu i w jakiej kolejności. Ustawienia zawsze zostają.</string>
+    <string name="start_bookmarks">Zakładki</string>
+    <string name="start_bookmarks_edit">Edytuj</string>
+    <string name="start_pick_bookmarks">Wybierz zakładki na stronę startową</string>
+    <string name="start_folder_empty">Pusty</string>
+    <string name="start_remove_from_start">Usuń ze strony startowej</string>
+    <string name="start_show_on_start">Pokaż na stronie startowej</string>
+    <string name="start_open_folder">Otwórz folder</string>
+    <string name="start_picker_title">Zakładki na stronie startowej</string>
+    <string name="start_picker_hint">Zaznacz zakładki i foldery do pokazania na stronie startowej (wybrano: %1$d). Zaznaczony folder staje się osobną sekcją.</string>
+    <string name="settings_start_bookmarks">Zakładki na stronie startowej</string>
+    <string name="settings_start_bookmarks_hint">Zakładki i foldery, które wybierzesz</string>
+    <string name="settings_start_bookmarks_choose">Wybierz zakładki</string>
+    <string name="settings_start_bookmarks_count">Wybrano: %1$d</string>
+    <string name="settings_favicons">Ikony witryn na stronie startowej</string>
+    <string name="settings_favicons_hint">Ikony pochodzą ze stron, które odwiedzasz; nic dodatkowo nie jest pobierane</string>
+    <string name="settings_favicons_gray">Ikony witryn w odcieniach szarości</string>
+    <string name="settings_start_background">Tło strony startowej</string>
+    <string name="settings_start_background_none">Brak</string>
+    <string name="settings_start_background_set">Własny obraz</string>
+    <string name="bg_choose_photo">Wybierz zdjęcie</string>
+    <string name="bg_enter_url">Podaj adres</string>
+    <string name="bg_remove">Usuń tło</string>
+    <string name="bg_url_title">Adres obrazu</string>
+    <string name="bg_url_field">https://...</string>
+    <string name="bg_dim">Przyciemnienie / rozjaśnienie obrazu</string>
+    <string name="bg_dim_0">Słabe</string>
+    <string name="bg_dim_1">Średnie</string>
+    <string name="bg_dim_2">Mocne</string>
+    <string name="bg_dim_3">Najmocniejsze</string>
+    <string name="bg_gray">Obraz w odcieniach szarości</string>
+    <string name="bg_working">Zapisuję obraz...</string>
+    <string name="bg_saved">Zapisano tło</string>
+    <string name="bg_err_url">Podaj adres internetowy (http lub https)</string>
+    <string name="bg_err_download">Nie udało się pobrać obrazu</string>
+    <string name="bg_err_large">Obraz jest za duży</string>
+    <string name="bg_err_image">To nie jest obraz</string>
+    <string name="bg_hint">Obraz jest kopiowany do aplikacji, więc zostaje po usunięciu oryginału. Karty prywatne nigdy go nie pokazują.</string>
 </resources>

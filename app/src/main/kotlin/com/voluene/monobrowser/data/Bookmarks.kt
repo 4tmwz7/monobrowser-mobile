@@ -24,7 +24,22 @@ data class BookmarkData(
     val nextId: Long = 1,
     val folders: List<BookmarkFolder> = emptyList(),
     val bookmarks: List<Bookmark> = emptyList(),
+    /**
+     * Start page selection: ids of bookmarks and folders (they share one id space) in the order the user picked
+     * them. Kept here, next to the data it points into, so that deleting a bookmark or folder drops it from the
+     * selection in the same operation; unknown ids are ignored and removed by [BookmarkCodec.sanitize]. A file
+     * without the field loads with an empty selection. Device-local: it is not part of sync or export.
+     */
+    val startPage: List<Long> = emptyList(),
 )
+
+/** A folder shown on the start page: its direct bookmarks and sub-folders. */
+data class StartFolder(val folder: BookmarkFolder, val bookmarks: List<Bookmark>, val subfolders: List<BookmarkFolder>)
+
+/** What the start page shows from the bookmarks: single bookmarks and folder sections, both in selection order. */
+data class StartContent(val bookmarks: List<Bookmark>, val folders: List<StartFolder>) {
+    val isEmpty: Boolean get() = bookmarks.isEmpty() && folders.isEmpty()
+}
 
 data class ImportResult(val data: BookmarkData, val added: Int, val skipped: Int)
 
@@ -74,10 +89,10 @@ object BookmarkOps {
         return data.copy(nextId = data.nextId + 1, bookmarks = data.bookmarks + bookmark)
     }
 
-    fun removeBookmark(data: BookmarkData, id: Long): BookmarkData = data.copy(bookmarks = data.bookmarks.filterNot { it.id == id })
+    fun removeBookmark(data: BookmarkData, id: Long): BookmarkData = pruneStart(data.copy(bookmarks = data.bookmarks.filterNot { it.id == id }))
 
     /** Removes every bookmark of [url] (the star in the menu). */
-    fun removeByUrl(data: BookmarkData, url: String): BookmarkData = data.copy(bookmarks = data.bookmarks.filterNot { it.url == url })
+    fun removeByUrl(data: BookmarkData, url: String): BookmarkData = pruneStart(data.copy(bookmarks = data.bookmarks.filterNot { it.url == url }))
 
     fun editBookmark(data: BookmarkData, id: Long, title: String, url: String): BookmarkData =
         data.copy(bookmarks = data.bookmarks.map { if (it.id == id) it.copy(title = cleanName(title), url = url.trim().ifEmpty { it.url }) else it })
@@ -109,10 +124,50 @@ object BookmarkOps {
     /** Deletes the folder with everything inside it. */
     fun deleteFolder(data: BookmarkData, id: Long): BookmarkData {
         val doomed = descendants(data, id)
-        return data.copy(
+        return pruneStart(data.copy(
             folders = data.folders.filterNot { it.id in doomed },
             bookmarks = data.bookmarks.filterNot { it.folderId in doomed },
-        )
+        ))
+    }
+
+    // --- Start page selection ---
+
+    const val MAX_START = 100
+
+    /** Drops ids that no longer name a bookmark or folder, and duplicates (order kept). */
+    fun pruneStart(data: BookmarkData): BookmarkData {
+        if (data.startPage.isEmpty()) return data
+        val live = HashSet<Long>().apply { data.folders.forEach { add(it.id) }; data.bookmarks.forEach { add(it.id) } }
+        val kept = data.startPage.filter { it in live }.distinct().take(MAX_START)
+        return if (kept == data.startPage) data else data.copy(startPage = kept)
+    }
+
+    fun isOnStart(data: BookmarkData, id: Long): Boolean = id in data.startPage
+
+    /** Appends a bookmark or folder to the start page (unknown ids and ones already there are ignored). */
+    fun addToStart(data: BookmarkData, id: Long): BookmarkData {
+        val exists = data.folders.any { it.id == id } || data.bookmarks.any { it.id == id }
+        if (!exists || id in data.startPage || data.startPage.size >= MAX_START) return data
+        return data.copy(startPage = data.startPage + id)
+    }
+
+    fun removeFromStart(data: BookmarkData, id: Long): BookmarkData =
+        if (id in data.startPage) data.copy(startPage = data.startPage - id) else data
+
+    fun toggleStart(data: BookmarkData, id: Long): BookmarkData =
+        if (id in data.startPage) removeFromStart(data, id) else addToStart(data, id)
+
+    /** The start page's content: selected bookmarks and folder sections that still exist, in selection order. */
+    fun startContent(data: BookmarkData): StartContent {
+        val bookmarks = ArrayList<Bookmark>()
+        val folders = ArrayList<StartFolder>()
+        val bookmarkById = data.bookmarks.associateBy { it.id }
+        val folderById = data.folders.associateBy { it.id }
+        for (id in data.startPage.distinct()) {
+            bookmarkById[id]?.let { bookmarks.add(it); continue }
+            folderById[id]?.let { folders.add(StartFolder(it, childBookmarks(data, it.id), childFolders(data, it.id))) }
+        }
+        return StartContent(bookmarks, folders)
     }
 
     /** All folders with their display path, for the "move to" picker (sorted by path). */
@@ -189,6 +244,6 @@ object BookmarkCodec {
         val bookmarks = data.bookmarks.filter { it.id > 0 && it.url.isNotBlank() && seen.add(it.id) }
             .map { if (it.folderId != null && it.folderId !in ids) it.copy(folderId = null) else it }
         val maxId = maxOf(folders.maxOfOrNull { it.id } ?: 0L, bookmarks.maxOfOrNull { it.id } ?: 0L)
-        return BookmarkData(nextId = maxOf(data.nextId, maxId + 1, 1L), folders = folders, bookmarks = bookmarks)
+        return BookmarkOps.pruneStart(BookmarkData(nextId = maxOf(data.nextId, maxId + 1, 1L), folders = folders, bookmarks = bookmarks, startPage = data.startPage))
     }
 }

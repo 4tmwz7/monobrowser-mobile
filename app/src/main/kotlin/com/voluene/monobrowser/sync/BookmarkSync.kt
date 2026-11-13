@@ -64,6 +64,7 @@ object BookmarkSync {
             val existing = existingBookmarks[key]
             existing?.copy(title = title, folderId = folderId) ?: Bookmark(nextId++, url, title, folderId, now)
         }
-        return current.copy(nextId = nextId, folders = outFolders, bookmarks = outBookmarks)
+        // The start page selection is device-local; what the merge removed leaves it.
+        return BookmarkOps.pruneStart(current.copy(nextId = nextId, folders = outFolders, bookmarks = outBookmarks))
     }
 }

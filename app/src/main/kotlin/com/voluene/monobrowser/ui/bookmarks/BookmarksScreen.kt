@@ -80,11 +80,13 @@ fun BookmarksScreen(
     onImport: (String) -> Result<ImportResult>,
     onExport: (json: Boolean) -> String,
     onClose: () -> Unit,
+    /** Folder to open in (null = top level). */
+    initialFolderId: Long? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var folderId by remember { mutableStateOf<Long?>(null) }
+    var folderId by remember { mutableStateOf(initialFolderId) }
     var dialog by remember { mutableStateOf<Dialog?>(null) }
     // A folder that no longer exists (deleted) falls back to the top level.
     val current = BookmarkOps.folder(data, folderId)
@@ -139,7 +141,7 @@ fun BookmarksScreen(
                     Box(Modifier.size(14.dp, 10.dp).border(2.dp, scheme.onBackground, RectangleShape))
                     Column(Modifier.weight(1f).padding(start = 12.dp, top = 10.dp, bottom = 10.dp)) {
                         Text(f.name, color = scheme.onBackground, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(stringResource(R.string.bookmarks_folder_count, count), color = scheme.onBackground.copy(alpha = 0.65f), fontSize = 12.sp)
+                        Text(androidx.compose.ui.res.pluralStringResource(R.plurals.bookmarks_folder_count, count, count), color = scheme.onBackground.copy(alpha = 0.65f), fontSize = 12.sp)
                     }
                     IconButton(onClick = { dialog = Dialog.FolderMenu(f) }) {
                         Icon(Icons.Default.MoreVert, stringResource(R.string.action_menu), tint = scheme.onBackground)
@@ -191,12 +193,22 @@ fun BookmarksScreen(
         is Dialog.BookmarkMenu -> MonoDialog({ dialog = null }) {
             Text(d.bookmark.title.ifBlank { d.bookmark.url }, color = scheme.onBackground, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             MonoButton(stringResource(R.string.bookmarks_open_new_tab), { dialog = null; onOpen(d.bookmark.url, true) }, Modifier.fillMaxWidth(), inverted = true)
+            val onStart = BookmarkOps.isOnStart(data, d.bookmark.id)
+            MonoButton(
+                stringResource(if (onStart) R.string.start_remove_from_start else R.string.start_show_on_start),
+                { dialog = null; onEdit { BookmarkOps.toggleStart(it, d.bookmark.id) } }, Modifier.fillMaxWidth(),
+            )
             MonoButton(stringResource(R.string.bookmarks_edit), { dialog = Dialog.EditBookmark(d.bookmark) }, Modifier.fillMaxWidth())
             MonoButton(stringResource(R.string.bookmarks_move), { dialog = Dialog.Move(d.bookmark, null) }, Modifier.fillMaxWidth())
             MonoButton(stringResource(R.string.bookmarks_delete), { dialog = Dialog.DeleteBookmark(d.bookmark) }, Modifier.fillMaxWidth())
         }
         is Dialog.FolderMenu -> MonoDialog({ dialog = null }) {
             Text(d.folder.name, color = scheme.onBackground, fontWeight = FontWeight.Bold)
+            val onStart = BookmarkOps.isOnStart(data, d.folder.id)
+            MonoButton(
+                stringResource(if (onStart) R.string.start_remove_from_start else R.string.start_show_on_start),
+                { dialog = null; onEdit { BookmarkOps.toggleStart(it, d.folder.id) } }, Modifier.fillMaxWidth(),
+            )
             MonoButton(stringResource(R.string.bookmarks_rename), { dialog = Dialog.RenameFolder(d.folder) }, Modifier.fillMaxWidth())
             MonoButton(stringResource(R.string.bookmarks_move), { dialog = Dialog.Move(null, d.folder) }, Modifier.fillMaxWidth())
             MonoButton(stringResource(R.string.bookmarks_delete), { dialog = Dialog.DeleteFolder(d.folder) }, Modifier.fillMaxWidth())

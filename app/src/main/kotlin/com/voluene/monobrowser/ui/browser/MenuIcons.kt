@@ -16,6 +16,7 @@ object MenuIcons {
     val StarOutline: ImageVector by lazy {
         icon("StarOutline", "M22,9.24l-7.19,-0.62L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21 12,17.27 18.18,21l-1.63,-7.03L22,9.24zM12,15.4l-3.76,2.27 1,-4.28 -3.32,-2.88 4.38,-0.38L12,6.1l1.71,4.04 4.38,0.38 -3.32,2.88 1,4.28L12,15.4z")
     }
+    val Folder: ImageVector by lazy { icon("Folder", "M2,4h8l2,2h10v14H2z") }
     val Article: ImageVector by lazy {
         icon("Article", "M19,3H5C3.9,3 3,3.9 3,5v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V5C21,3.9 20.1,3 19,3zM14,17H7v-2h7V17zM17,13H7v-2h10V13zM17,9H7V7h10V9z")
     }
@@ -38,6 +39,8 @@ object MenuIcons {
     val Contrast: ImageVector by lazy {
         icon("Contrast", "M12,22c5.52,0 10,-4.48 10,-10S17.52,2 12,2 2,6.48 2,12s4.48,10 10,10zM13,4.07c3.94,0.49 7,3.85 7,7.93s-3.06,7.44 -7,7.93V4.07z")
     }
+    /** Two overlapping page outlines (tabs). */
+    val Tabs: ImageVector by lazy { icon("Tabs", "M3,7v14h12V7H3zM5,9h8v10H5V9zM9,3v2h10v10h2V3H9z") }
     val Pause: ImageVector by lazy { icon("Pause", "M6,19h4V5H6v14zM14,5v14h4V5h-4z") }
     val Translate: ImageVector by lazy {
         icon("Translate", "M12.87,15.07l-2.54,-2.51 0.03,-0.03c1.74,-1.94 2.98,-4.17 3.71,-6.53L17,6L17,4h-7L10,2L8,2v2L1,4v1.99h11.17C11.5,7.92 10.44,9.75 9,11.35 8.07,10.32 7.3,9.19 6.69,8h-2c0.73,1.63 1.73,3.17 2.98,4.56l-5.09,5.02L4,19l5,-5 3.11,3.11 0.76,-2.04zM18.5,10h-2L12,22h2l1.12,-3h4.75L21,22h2l-4.5,-12zM15.88,17l1.62,-4.33L19.12,17h-3.24z")

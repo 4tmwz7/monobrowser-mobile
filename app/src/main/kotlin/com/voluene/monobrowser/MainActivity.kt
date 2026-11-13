@@ -57,6 +57,12 @@ class MainActivity : ComponentActivity(), ActivityHost {
         callback?.invoke(uri)
     }
 
+    private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val callback = documentResult
+        documentResult = null
+        callback?.invoke(uri)
+    }
+
     private val createDocument = registerForActivityResult(CreateDocumentWithType()) { uri ->
         val callback = documentResult
         documentResult = null
@@ -287,6 +293,17 @@ class MainActivity : ComponentActivity(), ActivityHost {
         documentResult = onResult
         try {
             openDocument.launch(mimeTypes)
+        } catch (_: android.content.ActivityNotFoundException) {
+            documentResult = null
+            onResult(null)
+        }
+    }
+
+    override fun pickImage(onResult: (Uri?) -> Unit) {
+        documentResult?.invoke(null)
+        documentResult = onResult
+        try {
+            pickImage.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         } catch (_: android.content.ActivityNotFoundException) {
             documentResult = null
             onResult(null)

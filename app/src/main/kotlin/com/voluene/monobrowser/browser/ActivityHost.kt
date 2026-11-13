@@ -17,6 +17,9 @@ interface ActivityHost {
     /** System "open document" picker (Storage Access Framework); [onResult] gets null when cancelled. */
     fun openDocument(mimeTypes: Array<String>, onResult: (Uri?) -> Unit)
 
+    /** System photo picker (no storage permission needed); [onResult] gets the picked image's Uri or null when cancelled. */
+    fun pickImage(onResult: (Uri?) -> Unit)
+
     /** System "create document" picker; [onResult] gets the new document's Uri or null when cancelled. */
     fun createDocument(suggestedName: String, mimeType: String, onResult: (Uri?) -> Unit)
 

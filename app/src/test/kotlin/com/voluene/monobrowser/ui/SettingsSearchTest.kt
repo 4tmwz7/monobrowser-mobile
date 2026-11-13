@@ -13,4 +13,11 @@ class SettingsSearchTest {
         assertTrue(settingMatches("TRYB stron", "Tryb ciemny stron", null))
         assertFalse(settingMatches("reklamy", "Tryb ciemny stron", "Strony"))
     }
+
+    @Test fun categoryNameIsSearchable() {
+        // A row is found by the name of its category (the screen appends it to the row's description).
+        assertTrue(settingMatches("wyglad", "Układ menu", "Wygląd"))
+        assertTrue(settingMatches("synchronizacja plik", "Plik synchronizacji", "Synchronizacja"))
+        assertFalse(settingMatches("wyglad", "Układ menu", "Karty i gesty"))
+    }
 }

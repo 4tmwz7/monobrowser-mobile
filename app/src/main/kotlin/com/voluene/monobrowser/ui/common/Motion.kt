@@ -76,10 +76,11 @@ fun Presence(visible: Boolean, content: @Composable () -> Unit) = Presence(if (v
 
 /**
  * A page pushed over another one (settings sub-page, note editor): slides in from the end edge and back out,
- * and follows the predictive back gesture in between. [key] identifies the page; null shows nothing.
+ * and follows the predictive back gesture in between. [key] identifies the page; null shows nothing. With
+ * [backEnabled] false the page does not take the back gesture (a page pushed over it does).
  */
 @Composable
-fun <T : Any> PushedPage(key: T?, onBack: () -> Unit, content: @Composable (T) -> Unit) {
+fun <T : Any> PushedPage(key: T?, onBack: () -> Unit, backEnabled: Boolean = true, content: @Composable (T) -> Unit) {
     val held = remember { arrayOfNulls<Any>(1) }
     if (key != null) held[0] = key
     AnimatedVisibility(
@@ -90,7 +91,7 @@ fun <T : Any> PushedPage(key: T?, onBack: () -> Unit, content: @Composable (T) -
         @Suppress("UNCHECKED_CAST")
         val shown = (key ?: held[0]) as T? ?: return@AnimatedVisibility
         androidx.compose.runtime.key(shown) {
-            PredictiveBackContainer(onBack = onBack, enabled = key != null) { content(shown) }
+            PredictiveBackContainer(onBack = onBack, enabled = key != null && backEnabled) { content(shown) }
         }
     }
 }

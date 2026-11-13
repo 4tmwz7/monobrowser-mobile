@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ system splash: the launcher icon is a light tile on #0a0a0a, so the splash is #0a0a0a too (not white). -->
+    <style name="Theme.MonoBrowser" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">#0a0a0a</item>
+    </style>
+</resources>

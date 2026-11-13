@@ -92,12 +92,34 @@ data class AppSettings(
     val autoPictureInPicture: Boolean = true,
     /** The picture-in-picture window shows the whole page made small (with the site's own player controls); off = only the video. */
     val pipWholePage: Boolean = false,
+    /** Start page: show the bookmarks and bookmark folders the user chose (see `BookmarkData.startPage`). */
+    val showStartBookmarks: Boolean = true,
+    /** Elements of the address bar's row in order (names of [BarItem]); see [BarLayout]. A missing field = the default layout. */
+    val barItems: List<String> = BarLayout.DEFAULT_IDS,
+    /** Main menu: order of the entries (names of [MenuId]); empty = default, ids missing here are appended. See [MenuLayout]. */
+    val menuOrder: List<String> = emptyList(),
+    /** Main menu entries the user hid (names of [MenuId]); Settings can never be hidden. */
+    val menuHidden: List<String> = emptyList(),
+    /** Start page tiles show the site's icon (from the pages you visit; nothing is downloaded for it) instead of a letter. */
+    val showFavicons: Boolean = true,
+    /** Site icons are drawn in greyscale (applied when drawing). */
+    val faviconsGrayscale: Boolean = true,
+    /** Custom start page background: the time its image was saved (0 = none); the file is `files/start-background.jpg`. */
+    val startBackground: Long = 0,
+    /** Strength of the overlay on the background (index into `StartBackground.DIM_LEVELS`). */
+    val startBackgroundDim: Int = StartBackground.DEFAULT_DIM,
+    /** The background image is drawn in greyscale (applied when drawing). */
+    val startBackgroundGrayscale: Boolean = true,
     /** Sync file chosen by the user (a content:// URI with a persisted permission); empty = sync off. */
     val syncUri: String = "",
 ) {
     /** Template (`{query}`) used by the address bar for text that is not a URL. */
     val searchTemplate: String
         get() = if (searchEngine == SearchEngine.CUSTOM) customSearchUrl else searchEngine.template ?: UrlUtils.DEFAULT_SEARCH_TEMPLATE
+
+    /** The address bar's row as a valid layout. */
+    val barLayout: List<BarItem>
+        get() = BarLayout.parse(barItems)
 
     /** URL loaded into a new tab, or null for a blank tab. */
     val newTabUrl: String?
@@ -160,6 +182,11 @@ object SettingsCodec {
             readerFontSize = s.readerFontSize.coerceIn(AppSettings.READER_FONT_RANGE.first, AppSettings.READER_FONT_RANGE.last),
             pinnedSites = s.pinnedSites.filter { UrlUtils.isHttpUrl(it.url) && it.url.length <= 2048 }
                 .distinctBy { it.url }.take(AppSettings.MAX_PINNED).map { it.copy(title = it.title.take(200)) },
+            startBackground = s.startBackground.coerceAtLeast(0),
+            startBackgroundDim = StartBackground.clampDim(s.startBackgroundDim),
+            menuOrder = MenuLayout.sanitizeOrder(s.menuOrder),
+            menuHidden = MenuLayout.sanitizeHidden(s.menuHidden),
+            barItems = BarLayout.ids(BarLayout.parse(s.barItems)),
             hiddenTopSites = s.hiddenTopSites.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
                 .takeLast(AppSettings.MAX_HIDDEN_TOP_SITES),
         )

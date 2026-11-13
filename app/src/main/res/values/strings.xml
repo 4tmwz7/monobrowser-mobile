@@ -131,7 +131,10 @@
     <string name="bookmarks_up">Up</string>
     <string name="bookmarks_empty">No bookmarks yet. Use the menu to add the current page, or import a file.</string>
     <string name="bookmarks_folder_empty">This folder is empty</string>
-    <string name="bookmarks_folder_count">%1$d items</string>
+    <plurals name="bookmarks_folder_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
     <string name="bookmarks_folder_name">Folder name</string>
     <string name="bookmarks_import_failed">Could not read this file</string>
     <string name="bookmarks_import_done">Imported %1$d bookmarks (%2$d skipped)</string>
@@ -155,11 +158,23 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
-    <string name="settings_section_general">General</string>
-    <string name="settings_section_appearance">Appearance</string>
-    <string name="settings_section_privacy">Privacy and security</string>
     <string name="settings_section_adblock">Adblock</string>
-    <string name="settings_section_about">About</string>
+    <string name="settings_cat_general">General</string>
+    <string name="settings_cat_general_hint">Search engine, startup, language</string>
+    <string name="settings_cat_start">Start page</string>
+    <string name="settings_cat_start_hint">New tab, top sites, background</string>
+    <string name="settings_cat_appearance">Appearance</string>
+    <string name="settings_cat_appearance_hint">Theme, toolbar position and layout</string>
+    <string name="settings_cat_tabs">Tabs and gestures</string>
+    <string name="settings_cat_tabs_hint">Link long-press, gestures, shortcuts</string>
+    <string name="settings_cat_pages">Pages</string>
+    <string name="settings_cat_pages_hint">Page theme, text size, video</string>
+    <string name="settings_cat_privacy">Privacy and blocking</string>
+    <string name="settings_cat_privacy_hint">Blocking, exceptions, permissions, data</string>
+    <string name="settings_cat_sync">Sync</string>
+    <string name="settings_cat_sync_hint">Bookmarks, reading list, notes in a file</string>
+    <string name="settings_cat_about">About and updates</string>
+    <string name="settings_cat_about_hint">Version, updates, licenses, website</string>
     <string name="settings_search_engine">Search engine</string>
     <string name="settings_engine_custom">Custom</string>
     <string name="settings_custom_url">Custom search address</string>
@@ -526,4 +541,52 @@
     <string name="settings_site_themes_hint">On these sites (and their subdomains) the page theme is fixed, regardless of the page theme setting.</string>
     <string name="settings_site_themes_empty">No sites. Set one from the menu \u22EE on a page.</string>
     <string name="menu_page_theme">Page theme</string>
+
+    <!-- start page bookmarks, address bar and menu layout, favicons, background -->
+    <string name="editor_move_up">Move up</string>
+    <string name="editor_move_down">Move down</string>
+    <string name="editor_restore_defaults">Restore defaults</string>
+    <string name="bar_item_address">Address field</string>
+    <string name="bar_item_tabs">Tab counter</string>
+    <string name="settings_bar_layout">Address bar layout</string>
+    <string name="settings_bar_layout_hint">Choose what the bar shows and in what order. The address field and the menu always stay; at most %1$d buttons fit.</string>
+    <string name="settings_menu_layout">Menu layout</string>
+    <string name="settings_menu_layout_hint">Choose which entries the menu shows and in what order. Settings always stays.</string>
+    <string name="start_bookmarks">Bookmarks</string>
+    <string name="start_bookmarks_edit">Edit</string>
+    <string name="start_pick_bookmarks">Choose bookmarks for the start page</string>
+    <string name="start_folder_empty">Empty</string>
+    <string name="start_remove_from_start">Remove from the start page</string>
+    <string name="start_show_on_start">Show on the start page</string>
+    <string name="start_open_folder">Open folder</string>
+    <string name="start_picker_title">Bookmarks on the start page</string>
+    <string name="start_picker_hint">Tick bookmarks and folders to show on the start page (%1$d chosen). A ticked folder becomes a section of its own.</string>
+    <string name="settings_start_bookmarks">Bookmarks on the start page</string>
+    <string name="settings_start_bookmarks_hint">The bookmarks and folders you choose</string>
+    <string name="settings_start_bookmarks_choose">Choose bookmarks</string>
+    <string name="settings_start_bookmarks_count">%1$d chosen</string>
+    <string name="settings_favicons">Site icons on the start page</string>
+    <string name="settings_favicons_hint">Icons come from pages you visit; nothing extra is downloaded</string>
+    <string name="settings_favicons_gray">Site icons in greyscale</string>
+    <string name="settings_start_background">Start page background</string>
+    <string name="settings_start_background_none">None</string>
+    <string name="settings_start_background_set">Custom picture</string>
+    <string name="bg_choose_photo">Choose a photo</string>
+    <string name="bg_enter_url">Enter an address</string>
+    <string name="bg_remove">Remove background</string>
+    <string name="bg_url_title">Picture address</string>
+    <string name="bg_url_field">https://...</string>
+    <string name="bg_dim">Veil over the picture</string>
+    <string name="bg_dim_0">Weak</string>
+    <string name="bg_dim_1">Medium</string>
+    <string name="bg_dim_2">Strong</string>
+    <string name="bg_dim_3">Strongest</string>
+    <string name="bg_gray">Picture in greyscale</string>
+    <string name="bg_working">Saving the picture...</string>
+    <string name="bg_saved">Background saved</string>
+    <string name="bg_err_url">Enter a web address (http or https)</string>
+    <string name="bg_err_download">Could not get the picture</string>
+    <string name="bg_err_large">The picture is too large</string>
+    <string name="bg_err_image">This is not a picture</string>
+    <string name="bg_hint">The picture is copied into the app, so it stays when the original is gone. Private tabs never show it.</string>
 </resources>

@@ -82,7 +82,8 @@ import com.voluene.monobrowser.util.UrlUtils
 /**
  * Full-screen tab list of the current workspace, with a workspace selector on top (tap = switch, long-press =
  * edit / reorder / delete, "+" = create). Private tabs are inverted and badged. A long press on a tab shows its
- * options ("Never sleep", "Move to workspace"); sleeping tabs are marked.
+ * options ("Never sleep", "Move to workspace"); sleeping tabs are marked and their previews are shown in greyscale
+ * (live tabs show theirs in colour).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -345,7 +346,8 @@ private fun SwipeToClose(onClose: () -> Unit, label: String, modifier: Modifier 
 private const val THRESHOLD = 0.4f
 
 /**
- * A tab in the grid: monogram + title + close on top, the page preview (greyscale, like the rest of the UI) below.
+ * A tab in the grid: monogram + title + close on top, the page preview below (in colour; greyscale
+ * only while the tab sleeps, applied when drawing so it follows sleep / wake-up).
  * Private tabs are inverted; the active tab has a heavy border; badges sit on the preview.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -387,7 +389,7 @@ private fun TabCard(
             if (thumbnail != null) {
                 Image(
                     thumbnail, contentDescription = null, contentScale = ContentScale.Crop, alignment = Alignment.TopCenter,
-                    colorFilter = GreyScale, modifier = Modifier.fillMaxSize(),
+                    colorFilter = if (tab.sleeping) GreyScale else null, modifier = Modifier.fillMaxSize(),
                 )
             } else {
                 Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -414,5 +416,5 @@ private fun TabCard(
     }
 }
 
-/** Page previews are shown without colour, like everything else in the app. */
+/** Preview of a sleeping tab (no live WebView): desaturated. */
 private val GreyScale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })

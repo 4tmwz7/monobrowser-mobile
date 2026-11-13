@@ -109,6 +109,7 @@ fun OnboardingScreen(settings: AppSettings, onChange: ((AppSettings) -> AppSetti
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when (step) {
                 0 -> {
+                    com.voluene.monobrowser.ui.common.AppLogo(size = 80.dp)
                     Text(stringResource(R.string.app_name), color = scheme.onBackground, fontSize = 34.sp, fontWeight = FontWeight.Black)
                     Text(stringResource(R.string.onboarding_welcome_pitch), color = scheme.onBackground, fontSize = 17.sp)
                     Heading(R.string.onboarding_language)

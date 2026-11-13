@@ -67,6 +67,7 @@ import com.voluene.monobrowser.download.DownloadRepository
 import android.webkit.JavascriptInterface
 import java.util.UUID
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voluene.monobrowser.adblock.Adblock
@@ -76,6 +77,10 @@ import com.voluene.monobrowser.util.TrackingParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -116,6 +121,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     val siteThemes = SiteThemes(File(File(app.filesDir, "adblock"), "site-themes.json"))
 
     val history = HistoryDb(app)
+    /** The start page's own copy of the chosen background image. */
+    val startBackground = com.voluene.monobrowser.browser.StartBackgroundStore(File(app.filesDir, com.voluene.monobrowser.settings.StartBackground.FILE_NAME), File(app.cacheDir, "background-import"))
+    /** Site icons for the start page tiles (`files/favicons`; never filled from private tabs). */
+    val favicons = com.voluene.monobrowser.browser.FaviconStore(File(app.filesDir, "favicons"))
     val downloads = DownloadRepository(app)
     /** Process-wide self-updater (see [com.voluene.monobrowser.update.UpdateManager]). */
     val updater = (app as com.voluene.monobrowser.MonoApp).updater
@@ -182,11 +191,22 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     private val _thumbnails = MutableStateFlow<Map<Long, ImageBitmap>>(emptyMap())
     val thumbnails: StateFlow<Map<Long, ImageBitmap>> = _thumbnails.asStateFlow()
 
-    /** Draws the tab's visible page into a small bitmap for the tab grid. Blank pages and hidden views are skipped. */
+    /** Sharper previews for the page swipe (memory only, newest [MAX_PAGE_PREVIEWS] recently active tabs). */
+    private val _previews = MutableStateFlow<Map<Long, ImageBitmap>>(emptyMap())
+    val previews: StateFlow<Map<Long, ImageBitmap>> = _previews.asStateFlow()
+
+    /**
+     * Tab whose previews the running bar swipe keeps alive (the neighbour sliding in); null when no swipe runs.
+     * Set by the UI while the swipe's page layer shows the neighbour: a capture of the departing page inserts
+     * into the preview maps and must not evict the preview being drawn. Main thread only.
+     */
+    var protectedPreviewId: Long? = null
+
     /**
      * Copies the tab's page as it is on screen (GPU copy, nothing redrawn on the main thread) and then runs [then]
      * (always, also when there was nothing to copy). Only a page that is actually visible can be copied; while a
-     * full-screen overlay covers it, the copy is skipped.
+     * full-screen overlay covers it, the copy is skipped. One GPU copy serves both previews: the sharper one for
+     * the page swipe, and the tab grid's small one scaled down from it.
      */
     fun captureThumbnail(id: Long, then: () -> Unit = {}) {
         val webView = webViews[id]
@@ -195,24 +215,49 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         if (webView == null || tab == null || activityHost == null || overlayOpen || !webView.isShown ||
             webView.width <= 0 || webView.height <= 0 || !UrlUtils.isHttpUrl(tab.url)
         ) return then()
-        val height = (webView.height * THUMBNAIL_WIDTH.toFloat() / webView.width).toInt().coerceIn(1, (THUMBNAIL_WIDTH * 1.6f).toInt())
+        // The sharper preview drives the size (the swipe draws it at the page's size); the grid copy is scaled down.
+        val width = previewWidth
+        val height = (webView.height * width.toFloat() / webView.width).toInt().coerceIn(1, width * 2)
         // The top part of the page (the bitmap is shorter than the view when the view is very tall).
-        val visibleHeight = (height * webView.width.toFloat() / THUMBNAIL_WIDTH).toInt().coerceAtMost(webView.height)
-        val bitmap = runCatching { Bitmap.createBitmap(THUMBNAIL_WIDTH, height, Bitmap.Config.ARGB_8888) }.getOrNull() ?: return then()
+        val visibleHeight = (height * webView.width.toFloat() / width).toInt().coerceAtMost(webView.height)
+        val bitmap = runCatching { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888) }.getOrNull() ?: return then()
         val location = IntArray(2).also(webView::getLocationInWindow)
         val source = android.graphics.Rect(location[0], location[1], location[0] + webView.width, location[1] + visibleHeight)
         activityHost.copyFromScreen(source, bitmap) { ok ->
             then()
-            if (!ok) return@copyFromScreen
-            // Half the memory: RGB_565 is plenty for a small greyscale preview (converted off the main thread).
+            if (!ok) {
+                bitmap.recycle()
+                return@copyFromScreen
+            }
             viewModelScope.launch {
-                val small = withContext(Dispatchers.Default) {
+                // Half the memory: RGB_565 is plenty for previews (converted off the main thread).
+                val sharp = withContext(Dispatchers.Default) {
                     runCatching { bitmap.copy(Bitmap.Config.RGB_565, false).also { bitmap.recycle() } }.getOrDefault(bitmap)
                 }
+                val small = withContext(Dispatchers.Default) { runCatching { gridPreview(sharp) }.getOrDefault(sharp) }
                 storeThumbnail(id, small)
+                storePreview(id, sharp)
             }
         }
     }
+
+    /** The tab grid's small preview, scaled down from a sharper capture (same geometry the old copies had). */
+    private fun gridPreview(sharp: Bitmap): Bitmap {
+        val width = THUMBNAIL_WIDTH
+        val height = (sharp.height * width.toFloat() / sharp.width).toInt().coerceIn(1, (THUMBNAIL_WIDTH * 1.6f).toInt())
+        val out = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+        Canvas(out).drawBitmap(
+            sharp,
+            android.graphics.Rect(0, 0, sharp.width, (height.toFloat() / width * sharp.width).toInt().coerceAtMost(sharp.height)),
+            android.graphics.RectF(0f, 0f, width.toFloat(), height.toFloat()),
+            null,
+        )
+        return out
+    }
+
+    /** Width of the sharper swipe preview: about half the screen, drawn at the page's width in the gesture. */
+    private val previewWidth: Int
+        get() = (getApplication<Application>().resources.displayMetrics.widthPixels / 2).coerceIn(240, 720)
 
     /** Set by the UI: a full-screen overlay covers the page, so it cannot be copied from the screen. */
     @Volatile var overlayOpen: Boolean = false
@@ -220,12 +265,39 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     private fun storeThumbnail(id: Long, bitmap: Bitmap) {
         if (_tabs.value.none { it.id == id }) return
         _thumbnails.update { old ->
-            // Re-inserting moves the tab to the end: the oldest previews are dropped first.
+            // Re-inserting moves the tab to the end: the oldest previews are dropped first (never the swipe's neighbour).
             val next = LinkedHashMap(old)
             next.remove(id)
             next[id] = bitmap.asImageBitmap()
-            while (next.size > MAX_THUMBNAILS) next.remove(next.keys.first())
+            while (next.size > MAX_THUMBNAILS) {
+                val eldest = next.keys.firstOrNull { it != protectedPreviewId } ?: break
+                next.remove(eldest)
+            }
             next
+        }
+    }
+
+    /** Like [storeThumbnail] for the sharper swipe previews (hard limit [MAX_PAGE_PREVIEWS]). */
+    private fun storePreview(id: Long, bitmap: Bitmap) {
+        if (_tabs.value.none { it.id == id }) return
+        _previews.update { old ->
+            val next = LinkedHashMap(old)
+            next.remove(id)
+            next[id] = bitmap.asImageBitmap()
+            while (next.size > MAX_PAGE_PREVIEWS) {
+                val eldest = next.keys.firstOrNull { it != protectedPreviewId } ?: break
+                next.remove(eldest)
+            }
+            next
+        }
+    }
+
+    /** Keeps a tab's sharper preview among the newest: the swipe previews follow the recently active tabs. */
+    private fun touchPreview(id: Long) {
+        val bitmap = _previews.value[id] ?: return
+        _previews.update { old ->
+            val value = old[id] ?: return@update old
+            LinkedHashMap(old).apply { remove(id); put(id, value) }
         }
     }
 
@@ -398,6 +470,20 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         if (_tabs.value.any { it.id == id }) activate(id)
     }
 
+    /** Set while a swipe switches tabs: the page is then slid off screen, so the tab being left must not be copied from it. */
+    private var leaveCaptureSuppressed = false
+
+    /** Runs [block] (a tab switch caused by the page swipe) without refreshing the thumbnail of the tab being left. */
+    fun <T> withoutLeaveCapture(block: () -> T): T {
+        val before = leaveCaptureSuppressed
+        leaveCaptureSuppressed = true
+        try {
+            return block()
+        } finally {
+            leaveCaptureSuppressed = before
+        }
+    }
+
     /** Swipe on the address bar: -1 = previous tab, +1 = next tab (within the current workspace). */
     fun switchRelative(delta: Int) {
         WorkspaceTabs.relative(_tabs.value, _activeTabId.value, delta)?.let(::activate)
@@ -422,6 +508,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         if (_floating.value == id) _floating.value = null
         if (floatingCopy == id) floatingCopy = null
         _thumbnails.update { it - id }
+        _previews.update { it - id }
         _loadProgress.update { it - id }
         webMedia.clear(id)
         pendingBlocked.remove(id)
@@ -433,6 +520,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         _tabs.value = remaining
         if (activeByWorkspace[closing.workspaceId] == id) activeByWorkspace.remove(closing.workspaceId)
         if (closing.isPrivate && remaining.none { it.isPrivate } && _glance.value?.isPrivate != true) {
+            // Private data goes with the last private tab; its previews are memory-only, keyed by tab id, and any
+            // entry whose tab is gone is dropped here as well.
+            val ids = _tabs.value.map { it.id }.toHashSet()
+            _previews.update { it.filterKeys(ids::contains) }
             clearPrivateData()
             privateSitePermissions.clear()
         }
@@ -500,12 +591,16 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         if (_activeTabId.value != id) {
             closeFind()
             exitFullScreen()
-            captureThumbnail(_activeTabId.value) // the tab being left, as it looks now (skipped under an overlay)
+            // The tab being left, as it looks now (skipped under an overlay, and while the swipe has slid the page away:
+            // the swipe refreshed the thumbnail when the gesture began).
+            if (!leaveCaptureSuppressed) captureThumbnail(_activeTabId.value)
             webViews[_activeTabId.value]?.let(::pauseIfSilent)
         }
         _activeTabId.value = id
         _currentWorkspaceId.value = tab.workspaceId
         activeByWorkspace[tab.workspaceId] = id
+        // The sharper swipe preview follows the recently active tabs (it is captured when a tab is left).
+        touchPreview(id)
         lastUsed[id] = SystemClock.elapsedRealtime()
         if (!tab.isPrivate) lastNormalActive = id
         ensureLive(id)?.onResume()
@@ -872,6 +967,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
      */
     fun onLowMemory() {
         _thumbnails.value = emptyMap()
+        _previews.value = emptyMap()
         val active = _activeTabId.value
         webViews.keys.toList().forEach { id ->
             val tab = _tabs.value.firstOrNull { it.id == id } ?: return@forEach
@@ -1015,6 +1111,23 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     override fun onNavState(tabId: Long, url: String?, canGoBack: Boolean, canGoForward: Boolean) =
         update(tabId) { it.copy(url = url ?: it.url, canGoBack = canGoBack, canGoForward = canGoForward) }
 
+    override fun onIcon(tabId: Long, url: String?, icon: Bitmap) {
+        // Never from private tabs or the Glance preview; the host is the key of the start page tiles.
+        val tab = tab(tabId) ?: return
+        if (tab.isPrivate || tabId == _glance.value?.id) return
+        val host = url?.let(TopSites::hostKey) ?: return
+        // Freshness first (a page reports its icon on every load), then copy and scale off the main thread.
+        viewModelScope.launch(Dispatchers.IO) {
+            if (favicons.isFresh(host)) return@launch
+            val copy = runCatching { icon.copy(Bitmap.Config.ARGB_8888, false) }.getOrNull() ?: return@launch
+            try {
+                runCatching { favicons.save(host, copy) }
+            } finally {
+                copy.recycle()
+            }
+        }
+    }
+
     override fun onTitle(tabId: Long, title: String) {
         if (tabId in errorUrls) return // keep the error page title
         update(tabId) { it.copy(title = title) }
@@ -1029,6 +1142,14 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     private val _loadProgress = MutableStateFlow<Map<Long, Int>>(emptyMap())
     /** Live load percentage per tab (read by the progress lines only, in their draw phase). */
     val loadProgress: StateFlow<Map<Long, Int>> = _loadProgress.asStateFlow()
+
+    private val _pageVisible = MutableSharedFlow<Long>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** Tab ids whose page just showed its first content (a page swipe keeps the neighbour's preview until then). */
+    val pageVisible: SharedFlow<Long> = _pageVisible.asSharedFlow()
+
+    override fun onPageCommitVisible(tabId: Long) {
+        _pageVisible.tryEmit(tabId)
+    }
 
     override fun onProgress(tabId: Long, progress: Int) {
         _loadProgress.update { it + (tabId to progress) }
@@ -1482,6 +1603,32 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         }
     }
 
+    // --- Start page background ---
+
+    /** Copies the photo [uri] into the app as the start page background; [onDone] runs on the main thread. */
+    fun setStartBackgroundFromUri(uri: android.net.Uri, onDone: (com.voluene.monobrowser.browser.BackgroundResult) -> Unit) {
+        viewModelScope.launch { finishBackground(startBackground.importFromUri(getApplication(), uri), onDone) }
+    }
+
+    /** Downloads [url] (http/https, size and time limited) as the start page background. */
+    fun setStartBackgroundFromUrl(url: String, onDone: (com.voluene.monobrowser.browser.BackgroundResult) -> Unit) {
+        viewModelScope.launch { finishBackground(startBackground.importFromUrl(url), onDone) }
+    }
+
+    private fun finishBackground(result: com.voluene.monobrowser.browser.BackgroundResult, onDone: (com.voluene.monobrowser.browser.BackgroundResult) -> Unit) {
+        if (result == com.voluene.monobrowser.browser.BackgroundResult.OK) updateSettings { it.copy(startBackground = System.currentTimeMillis()) }
+        onDone(result)
+    }
+
+    fun removeStartBackground() {
+        updateSettings { it.copy(startBackground = 0) }
+        // Removal queues behind a running import (one mutex); the stamp is cleared again once the file is really gone.
+        viewModelScope.launch {
+            startBackground.remove()
+            updateSettings { it.copy(startBackground = 0) }
+        }
+    }
+
     fun editBookmarks(transform: (BookmarkData) -> BookmarkData) = bookmarkFile.update(transform)
 
     fun importBookmarks(text: String): Result<ImportResult> = runCatching {
@@ -1520,7 +1667,10 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
 
     /** "Clear browsing data": history is wiped on a background thread, WebView data on the main thread. */
     fun clearBrowsingData(history: Boolean, cookies: Boolean, cache: Boolean, siteStorage: Boolean) {
-        if (history) viewModelScope.launch(Dispatchers.IO) { runCatching { this@TabManager.history.clear() } }
+        if (history) viewModelScope.launch(Dispatchers.IO) {
+            runCatching { this@TabManager.history.clear() }
+            runCatching { favicons.clear() }
+        }
         if (cookies) {
             CookieManager.getInstance().removeAllCookies(null)
             CookieManager.getInstance().flush()
@@ -1947,6 +2097,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         const val THUMBNAIL_WIDTH = 300
         const val BLOCKED_FLUSH_MS = 250L
         const val MAX_THUMBNAILS = 30
+        /** Hard limit of the sharper page-swipe previews (memory only). */
+        const val MAX_PAGE_PREVIEWS = 3
         const val PAGE_BACKGROUND_LIGHT = 0xFFFFFFFF.toInt()
         const val PAGE_BACKGROUND_DARK = 0xFF000000.toInt()
     }

@@ -105,9 +105,16 @@ object ConcentricCorners {
 
 /** A shape that follows the screen's rounded corners wherever the element touches them (see [ConcentricCorners]). */
 @Stable
-class ScreenAwareShape internal constructor(private val view: View) {
+class ScreenAwareShape internal constructor(private val view: View, frozen: () -> Boolean = { false }) {
     var radii by mutableStateOf(CornerRadii())
         private set
+
+    /**
+     * Read at layout time: while true the last measurement is kept. Set while the element is being dragged
+     * (an address-bar swipe): [boundsInWindow] rides along with a translated element, so a measurement taken
+     * mid-gesture would change the radii every frame and let the content "swim".
+     */
+    private val isFrozen: () -> Boolean = frozen
 
     /** Square unless a corner reaches into a rounded screen corner. */
     val shape: Shape
@@ -118,9 +125,10 @@ class ScreenAwareShape internal constructor(private val view: View) {
 
     /** Put it before the background/border/clip that use [shape]. */
     val modifier: Modifier = Modifier.onGloballyPositioned { coordinates ->
+        // Frozen (a gesture moves the element), or mid-animation (scaled, or partly off screen): keep the last
+        // shape, so nothing recomposes per frame and the corners do not flicker while a page or sheet moves.
+        if (isFrozen()) return@onGloballyPositioned
         val bounds = coordinates.boundsInWindow()
-        // Mid-animation (scaled, or partly off screen): keep the last shape, so nothing recomposes per frame and
-        // the corners do not flicker between square and round while a page or sheet moves.
         if (inMotion(bounds, coordinates.size)) return@onGloballyPositioned
         val next = ConcentricCorners.radii(bounds, ConcentricCorners.displayCorners(view))
         if (next != radii) radii = next
@@ -133,19 +141,42 @@ class ScreenAwareShape internal constructor(private val view: View) {
  * screens, older Android and wherever the corners are already clear.
  */
 @Composable
-fun Modifier.cornerSafeHorizontalPadding(fromBottom: Boolean, sampleFraction: Float = 0.15f, margin: androidx.compose.ui.unit.Dp = 2.dp): Modifier {
+fun Modifier.cornerSafeHorizontalPadding(
+    fromBottom: Boolean,
+    sampleFraction: Float = 0.15f,
+    margin: androidx.compose.ui.unit.Dp = 2.dp,
+    /** Where the measured insets are kept; share it to draw an identical copy of the element (see [cornerInsetsPadding]). */
+    shared: CornerInsets = remember { CornerInsets() },
+    /** Read at layout time: while true the last measured insets are kept (the element is being dragged; see [ScreenAwareShape]). */
+    frozen: () -> Boolean = { false },
+): Modifier {
     val view = LocalView.current
     val density = androidx.compose.ui.platform.LocalDensity.current
-    var insets by remember { mutableStateOf(0f to 0f) }
     return this
         .onGloballyPositioned { coordinates ->
+            if (frozen()) return@onGloballyPositioned
             val rect = coordinates.boundsInWindow()
             if (inMotion(rect, coordinates.size)) return@onGloballyPositioned
             val y = if (fromBottom) rect.bottom - rect.height * sampleFraction else rect.top + rect.height * sampleFraction
             val next = ConcentricCorners.horizontalInsets(rect, ConcentricCorners.displayCorners(view), y, fromBottom, with(density) { margin.toPx() })
-            if (next != insets) insets = next
+            if (next.first != shared.start) shared.start = next.first
+            if (next.second != shared.end) shared.end = next.second
         }
-        .padding(start = with(density) { insets.first.toDp() }, end = with(density) { insets.second.toDp() })
+        .cornerInsetsPadding(shared)
+}
+
+/** Insets (px) that [cornerSafeHorizontalPadding] measured; read by the element and by non-measuring copies of it. */
+@Stable
+class CornerInsets {
+    var start by mutableStateOf(0f)
+    var end by mutableStateOf(0f)
+}
+
+/** The padding of [cornerSafeHorizontalPadding] without measuring: a copy of an element (e.g. the neighbour's bar) that sits where [shared]'s owner will. */
+@Composable
+fun Modifier.cornerInsetsPadding(shared: CornerInsets): Modifier {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    return padding(start = with(density) { shared.start.toDp() }, end = with(density) { shared.end.toDp() })
 }
 
 /** The element is drawn scaled or clipped by the window edge, i.e. it is being animated. */
@@ -153,7 +184,7 @@ private fun inMotion(bounds: androidx.compose.ui.geometry.Rect, size: androidx.c
     kotlin.math.abs(bounds.width - size.width) > 1f || kotlin.math.abs(bounds.height - size.height) > 1f
 
 @Composable
-fun rememberScreenAwareShape(): ScreenAwareShape {
+fun rememberScreenAwareShape(frozen: () -> Boolean = { false }): ScreenAwareShape {
     val view = LocalView.current
-    return remember(view) { ScreenAwareShape(view) }
+    return remember(view) { ScreenAwareShape(view, frozen) }
 }
