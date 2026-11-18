@@ -335,6 +335,7 @@ dependencies = [
  "android_logger",
  "jni",
  "log",
+ "serde_json",
 ]
 
 [[package]]

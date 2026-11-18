@@ -64,7 +64,9 @@ class MonoWebViewClient(
         }
         // Frames inside a page never get to start apps.
         if (!request.isForMainFrame) return true
-        return ui.openExternalLink(tabId, action, request.hasGesture() || request.isRedirect)
+        // A redirect is not a gesture by itself (a script could load an http URL that 302s to an app): redirects after a tap
+        // are covered by the tab's user activation window instead.
+        return ui.openExternalLink(tabId, action, request.hasGesture())
     }
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {

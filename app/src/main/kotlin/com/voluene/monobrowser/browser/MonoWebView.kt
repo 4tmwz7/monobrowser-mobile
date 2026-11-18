@@ -19,6 +19,27 @@ class MonoWebView(context: Context) : WebView(context) {
      */
     var keepPlayingInBackground: () -> Boolean = { false }
 
+    /** The user tapped the page (finger lifted close to where it went down): starts a user-activation window. */
+    var onUserTap: () -> Unit = {}
+    private var downX = 0f
+    private var downY = 0f
+
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> { downX = event.x; downY = event.y }
+            android.view.MotionEvent.ACTION_UP -> {
+                val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+                if (kotlin.math.abs(event.x - downX) <= slop && kotlin.math.abs(event.y - downY) <= slop) onUserTap()
+            }
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == android.view.KeyEvent.KEYCODE_ENTER) onUserTap()
+        return super.dispatchKeyEvent(event)
+    }
+
     /** When the user last asked to play (notification, Now Bar, lock screen): it starts before the page reports it. */
     private var playRequestedAt = 0L
 

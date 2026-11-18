@@ -3,6 +3,7 @@ package com.voluene.monobrowser.ui.browser
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,12 +34,14 @@ import com.voluene.monobrowser.ui.common.MonoDialog
 /** Shows the permission prompt or the JS alert/confirm/prompt of a page, in the monochrome style. */
 @Composable
 fun PageDialogView(dialog: PageDialog) {
-    BackHandler { dialog.cancel() }
+    // Back answers like a tap outside: "Stay in browser" for the app question (cancel() is for a closing tab).
+    BackHandler { if (dialog is PageDialog.OpenInApp) dialog.stay() else dialog.cancel() }
     when (dialog) {
         is PageDialog.Permission -> PermissionDialog(dialog)
         is PageDialog.Alert -> MessageDialog(dialog.origin, dialog.message, onOk = dialog.close, onCancel = null)
         is PageDialog.Confirm -> MessageDialog(dialog.origin, dialog.message, onOk = { dialog.resolve(true) }, onCancel = { dialog.resolve(false) })
         is PageDialog.Prompt -> PromptDialog(dialog)
+        is PageDialog.OpenInApp -> OpenInAppDialog(dialog)
     }
 }
 
@@ -95,6 +99,26 @@ private fun PromptDialog(dialog: PageDialog.Prompt) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MonoButton(stringResource(R.string.dialog_cancel), { dialog.resolve(null) }, Modifier.weight(1f))
             MonoButton(stringResource(R.string.dialog_ok), { dialog.resolve(text) }, Modifier.weight(1f), inverted = true)
+        }
+    }
+}
+
+@Composable
+private fun OpenInAppDialog(dialog: PageDialog.OpenInApp) {
+    val scheme = MaterialTheme.colorScheme
+    val title = dialog.appLabel?.let { stringResource(R.string.open_in_app_title, it) } ?: stringResource(R.string.open_in_app_title_generic)
+    MonoDialog(onDismiss = dialog.stay) {
+        Text(title, color = scheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        if (dialog.choices.isNotEmpty()) {
+            Text(dialog.choices.joinToString(" \u00b7 "), color = scheme.onBackground, fontSize = 14.sp)
+        }
+        dialog.target?.let {
+            Text(it, color = scheme.onBackground.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        // Stacked full width: "Stay in browser" does not fit half the dialog in Polish.
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            MonoButton(stringResource(R.string.open_in_app_open), dialog.open, Modifier.fillMaxWidth(), inverted = true)
+            MonoButton(stringResource(R.string.open_in_app_stay), dialog.stay, Modifier.fillMaxWidth())
         }
     }
 }

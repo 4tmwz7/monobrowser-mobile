@@ -72,6 +72,10 @@
     <string name="dialog_cancel">Cancel</string>
     <string name="link_unsupported">This kind of link is not supported</string>
     <string name="link_no_app">No app found to open this link</string>
+    <string name="open_in_app_title">Open in %1$s?</string>
+    <string name="open_in_app_title_generic">Open in app?</string>
+    <string name="open_in_app_open">Open in app</string>
+    <string name="open_in_app_stay">Stay in browser</string>
     <string name="error_retry">Try again</string>
     <string name="err_offline_title">No connection</string>
     <string name="err_offline_hint">You are not connected to the internet. Check your Wi-Fi, mobile data or airplane mode, then try again.</string>

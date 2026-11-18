@@ -72,6 +72,10 @@
     <string name="dialog_cancel">Anuluj</string>
     <string name="link_unsupported">Ten rodzaj linku nie jest obsługiwany</string>
     <string name="link_no_app">Nie znaleziono aplikacji do otwarcia tego linku</string>
+    <string name="open_in_app_title">Otworzyć w aplikacji %1$s?</string>
+    <string name="open_in_app_title_generic">Otworzyć w aplikacji?</string>
+    <string name="open_in_app_open">Otwórz w aplikacji</string>
+    <string name="open_in_app_stay">Zostań w przeglądarce</string>
     <string name="error_retry">Spróbuj ponownie</string>
     <string name="err_offline_title">Brak połączenia</string>
     <string name="err_offline_hint">Nie masz połączenia z internetem. Sprawdź Wi-Fi, dane komórkowe lub tryb samolotowy, a potem spróbuj ponownie.</string>

@@ -13,13 +13,20 @@ class ExternalLinksTest {
     }
 
     @Test fun appSchemesOpenExternally() {
-        for (url in listOf("mailto:a@b.c", "tel:+48123", "sms:123?body=hi", "geo:50,20", "market://details?id=x.y")) {
+        for (url in listOf("mailto:a@b.c", "tel:+48123", "sms:123?body=hi", "smsto:1", "mms:1", "mmsto:1", "geo:50,20")) {
             assertEquals(url, LinkAction.OpenExternal(url), ExternalLinks.classify(url))
         }
     }
 
+    @Test fun ownAppSchemesAreAsked() {
+        assertEquals(LinkAction.OpenApp("reddit://r/x", "reddit"), ExternalLinks.classify("reddit://r/x"))
+        assertEquals(LinkAction.OpenApp("vnd.youtube:abc", "vnd.youtube"), ExternalLinks.classify("vnd.youtube:abc"))
+        assertEquals(LinkAction.OpenApp("FB://profile/1", "fb"), ExternalLinks.classify("FB://profile/1"))
+        assertEquals(LinkAction.OpenApp("market://details?id=x.y", "market"), ExternalLinks.classify("market://details?id=x.y"))
+    }
+
     @Test fun dangerousAndUnknownSchemesAreIgnored() {
-        for (url in listOf("javascript:alert(1)", "file:///etc/passwd", "content://x/y", "data:text/html,hi", "weird-app://x", "view-source:https://a")) {
+        for (url in listOf("javascript:alert(1)", "file:///etc/passwd", "content://x/y", "data:text/html,hi", "view-source:https://a", "chrome://settings", "android-app://x", "ftp://x", "monobrowser-retry:")) {
             assertTrue(url, ExternalLinks.classify(url) is LinkAction.Ignore)
         }
         assertEquals(LinkAction.Ignore("javascript"), ExternalLinks.classify("JavaScript:alert(1)"))
@@ -45,5 +52,17 @@ class ExternalLinksTest {
 
     @Test fun schemeIsLowercased() {
         assertEquals("mailto", ExternalLinks.schemeOf(" MAILTO:a@b.c"))
+    }
+
+    @Test fun displayTargetIsShortAndReadable() {
+        fun target(url: String) = ExternalLinks.displayTarget(ExternalLinks.classify(url))
+        assertEquals("com.reddit.frontpage", target("market://details?id=com.reddit.frontpage&referrer=af_tranid%3DMz%26pid%3Dxpromo"))
+        assertEquals("reddit://reddit/r/Polska", target("reddit://reddit/r/Polska/?af_channel=xpromo&af_deeplink=true#x"))
+        assertEquals("com.example.app", target("intent://x#Intent;scheme=foo;package=com.example.app;end"))
+        assertNull(target("intent://x#Intent;scheme=foo;end"))
+        assertNull(target("https://example.com/"))
+        val long = target("myapp://" + "a".repeat(200))!!
+        assertEquals(60, long.length)
+        assertTrue(long.endsWith("\u2026"))
     }
 }

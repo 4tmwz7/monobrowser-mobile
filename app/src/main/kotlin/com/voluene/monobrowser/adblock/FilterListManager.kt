@@ -175,7 +175,9 @@ internal class FilterListManager(
 
     private fun loadCache() {
         val f = cacheFile
-        if (!f.exists()) return
+        // Caches from older SET_VERSIONs are never read again.
+        dir.listFiles { x -> x.name.startsWith("engine-v") && x.name.endsWith(".bin") && x.name != f.name }?.forEach { it.delete() }
+        if (!f.exists()) return buildFromDisk()
         state = ListsState.LOADING
         publishStatus()
         val t0 = clock()
@@ -183,10 +185,26 @@ internal class FilterListManager(
         if (engine == null) {
             Log.w(NativeAdblock.TAG, "cache unreadable, will rebuild")
             f.delete()
-            return
+            return buildFromDisk()
         }
         publish(engine)
         Log.i(NativeAdblock.TAG, "engine loaded from cache in ${clock() - t0} ms")
+    }
+
+    /**
+     * No usable cache (first start of a new SET_VERSION, or a broken file): block right away with the lists already on
+     * disk instead of waiting for the network. Not saved as the cache, so the lists still count as stale and the next
+     * round downloads them and writes a fresh cache.
+     */
+    private fun buildFromDisk() {
+        val files = lists.map { File(listsDir, "${it.id}.txt") }.filter { it.isFile && it.length() > 0 }
+        if (files.isEmpty()) return
+        state = ListsState.LOADING
+        publishStatus()
+        val t0 = clock()
+        val engine = NativeEngine.fromFiles(files.map { it.absolutePath }) ?: return
+        publish(engine)
+        Log.i(NativeAdblock.TAG, "engine built from ${files.size} lists on disk in ${clock() - t0} ms")
     }
 
     /** Downloads lists and rebuilds the engine. Returns true when every list is present and the engine is fresh. */

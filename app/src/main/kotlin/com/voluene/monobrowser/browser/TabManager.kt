@@ -514,6 +514,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         pendingBlocked.remove(id)
         webViews.remove(id)?.let { destroy(it, closing.isPrivate) }
         lastUsed.remove(id)
+        activations.remove(id)
+        activationUrls.remove(id)
         errorUrls.remove(id)
         sessionStore.deleteTabState(id)
         val remaining = _tabs.value.filterNot { it.id == id }
@@ -620,6 +622,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         errorUrls.remove(id)
         val webView = ensureLive(id, restore = false)
         applyPageTheme(id, url) // before the load: the new page must start with the right colour scheme
+        markActivation(id, url) // typed by the user: a short link that redirects to an app may ask
         webView?.loadUrl(url)
     }
 
@@ -733,6 +736,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
             openerId = tabId.takeIf { _tabs.value.any { t -> t.id == it } },
         )
         val webView = webViews[id] ?: return false
+        markActivation(id) // opened by a tap: its first redirects may start an app
         (resultMsg.obj as? WebView.WebViewTransport)?.webView = webView
         resultMsg.sendToTarget()
         return true
@@ -793,6 +797,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         pageContext.dark = isPageDark(tab.isPrivate, tab.url)
         val webView = MonoWebView(pageContext)
         pageContexts[webView] = pageContext
+        webView.onUserTap = { markActivation(tab.id) }
         webView.keepPlayingInBackground = {
             webMedia.state.value?.let { it.tabId == tab.id && it.playing } == true || _floating.value == tab.id
         }
@@ -1404,6 +1409,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
             isPrivate = isPrivate, url = url, background = background, workspaceId = source?.workspaceId ?: _currentWorkspaceId.value,
             openerId = sourceTabId.takeIf { !background && source != null && _tabs.value.any { it.id == sourceTabId } },
         )
+        markActivation(id)
         if (background) showMessage(str(R.string.link_opened_background), str(R.string.message_switch)) { switchTo(id) }
     }
 
@@ -1426,6 +1432,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
             workspaceId = source?.workspaceId ?: _currentWorkspaceId.value,
         )
         _glance.value = glance
+        markActivation(glance.id)
         val webView = createWebView(glance) // same profile as the source tab, adblock attached like any tab
         webViews[glance.id] = webView
         applyPageTheme(glance.id, url)
@@ -1441,6 +1448,8 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         cancelDialogsOf(glance.id)
         webViews.remove(glance.id)?.let { destroy(it, glance.isPrivate) }
         errorUrls.remove(glance.id)
+        activations.remove(glance.id)
+        activationUrls.remove(glance.id)
         if (glance.isPrivate && _tabs.value.none { it.isPrivate }) {
             clearPrivateData()
             privateSitePermissions.clear()
@@ -1451,6 +1460,7 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
     fun expandGlance() {
         val source = _activeTabId.value
         val glance = adoptGlance() ?: return
+        markActivation(glance.id) // "Open in tab" is a user action too
         update(glance.id) { it.copy(openerId = source) }
         activate(glance.id)
     }
@@ -1781,19 +1791,89 @@ class TabManager(app: Application) : AndroidViewModel(app), TabEvents, TabUi, co
         return true
     }
 
+    /** Per-tab user-activation windows (taps on the page, or the tab being opened by a user action). */
+    private val activations = HashMap<Long, UserActivation>()
+
+    /** True when the page shows no text and no media: nothing to stay for. */
+    private val BLANK_PAGE_JS =
+        "(function(){var b=document.body;if(!b)return true;" +
+            "if((b.innerText||'').trim().length>0)return false;" +
+            "return !document.querySelector('img,video,canvas,svg,iframe:not([style*=\"display:none\"]):not([style*=\"display: none\"])');})()"
+
+    /** The page each tab showed when it was last touched: a different page by the time an app link asks is a hop page. */
+    private val activationUrls = HashMap<Long, String?>()
+
+    /** [pageUrl]: the page the action is about (the typed address); by default the page on screen. */
+    private fun markActivation(tabId: Long, pageUrl: String? = webViews[tabId]?.url) {
+        activations.getOrPut(tabId) { UserActivation() }.touch(SystemClock.elapsedRealtime())
+        activationUrls[tabId] = pageUrl
+    }
+
     override fun openExternalLink(tabId: Long, action: LinkAction, hasGesture: Boolean): Boolean {
         if (action == LinkAction.Load) return false
-        if (!hasGesture) return true // no app launches from scripts/redirects without a tap
-        if (action is LinkAction.Ignore) {
-            toast(R.string.link_unsupported)
-            return true
-        }
-        when (val result = ExternalLauncher.launch(getApplication(), action)) {
-            LaunchResult.Opened -> Unit
-            is LaunchResult.LoadFallback -> webViews[tabId]?.loadUrl(result.url)
-            LaunchResult.Failed -> toast(R.string.link_no_app)
+        // Only taps/redirects after a tap, or a script within a few seconds of a tap ([UserActivation]), resolve or ask
+        // anything; other scripts get nothing (no dialog, no app). Whatever answers consumes that window.
+        val activation = activations[tabId]
+        val allowed = hasGesture || activation?.isActive(SystemClock.elapsedRealtime()) == true
+        val apps = if (allowed) ExternalLauncher.resolveApps(getApplication(), action) else null
+        val decision = ExternalLinkPolicy.decide(action, allowed, apps)
+        if (decision != ExternalDecision.None) activation?.consume()
+        when (decision) {
+            ExternalDecision.None -> Unit
+            ExternalDecision.ToastUnsupported -> toast(R.string.link_unsupported)
+            ExternalDecision.ToastNoApp -> toast(R.string.link_no_app)
+            ExternalDecision.OpenNow -> launchExternal(tabId, action)
+            is ExternalDecision.LoadFallback -> webViews[tabId]?.loadUrl(decision.url)
+            is ExternalDecision.Ask -> askOpenInApp(tabId, action, decision)
         }
         return true
+    }
+
+    private fun launchExternal(tabId: Long, action: LinkAction): Boolean =
+        when (val result = ExternalLauncher.launch(getApplication(), action)) {
+            LaunchResult.Opened -> true
+            is LaunchResult.LoadFallback -> { webViews[tabId]?.loadUrl(result.url); false }
+            LaunchResult.Failed -> { toast(R.string.link_no_app); false }
+        }
+
+    /**
+     * The tap led to a page that only hops to an app (e.g. reddit.onelink.me, blank): once the question is answered it is
+     * left behind - back to the page that was tapped, or, for a tab a link opened just for the hop, close it and return
+     * to the tab it came from (like system Back).
+     */
+    private fun leaveHopPage(tabId: Long) {
+        // Only a blank page is a hop: a page with its own content (an article that also offers its app) stays.
+        val webView = webViews[tabId] ?: return
+        webView.evaluateJavascript(BLANK_PAGE_JS) { blank ->
+            if (blank != "true" || webViews[tabId] !== webView) return@evaluateJavascript
+            val tab = _tabs.value.firstOrNull { it.id == tabId } ?: return@evaluateJavascript
+            if (tab.canGoBack) return@evaluateJavascript goBack(tabId)
+            val opener = backTarget(tab) ?: return@evaluateJavascript
+            closeTab(tabId)
+            switchTo(opener)
+        }
+    }
+
+    /** One "Open in app" question at a time: a new one (e.g. the next redirect) replaces the old, which just disappears. */
+    private fun askOpenInApp(tabId: Long, action: LinkAction, ask: ExternalDecision.Ask) {
+        _dialogs.update { list -> list.filterNot { it is PageDialog.OpenInApp && it.tabId == tabId } }
+        val current = webViews[tabId]?.url
+        val origin = current?.let { Uri.parse(it).host }.orEmpty()
+        // The page changed since the tap: the app link comes from a page the tap only passed through.
+        val hop = current != activationUrls[tabId]
+        addDialog { id ->
+            PageDialog.OpenInApp(
+                id, tabId, origin, ask.appLabel, ask.choices, ExternalLinks.displayTarget(action),
+                open = { removeDialog(id); if (launchExternal(tabId, action) && hop) leaveHopPage(tabId) },
+                // The tab may be gone by now (closed, asleep): then there is no WebView to load the fallback in.
+                stay = {
+                    removeDialog(id)
+                    val fallback = ask.stayUrl
+                    if (fallback != null) webViews[tabId]?.loadUrl(fallback) else if (hop) leaveHopPage(tabId)
+                },
+                dismiss = { removeDialog(id) },
+            )
+        }
     }
 
     override fun startDownload(tabId: Long, url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {

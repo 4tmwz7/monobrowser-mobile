@@ -12,8 +12,12 @@ object FilterLists {
     private const val GHOSTERY =
         "https://raw.githubusercontent.com/ghostery/adblocker/master/packages/adblocker/assets"
 
-    /** Bump when the list set / parse options change: invalidates the serialized engine cache. */
-    const val SET_VERSION = 1
+    /**
+     * Bump when the list set / parse options / built-in rules (`BUILTIN_RULES` in native/adblock engine.rs,
+     * appended to every engine build) change: invalidates the serialized engine cache.
+     * 2: built-in Reddit scroll-lock fix + `:style()` cosmetic rules.
+     */
+    const val SET_VERSION = 2
 
     val ALL: List<FilterList> = listOf(
         "easylist/easylist",

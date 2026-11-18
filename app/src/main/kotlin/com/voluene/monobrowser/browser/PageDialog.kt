@@ -51,4 +51,23 @@ sealed interface PageDialog {
     ) : PageDialog {
         override fun cancel() = resolve(null)
     }
+
+    /** A link that wants to start an app: "Open in app" or "Stay in browser" (back / tap outside = stay). */
+    class OpenInApp(
+        override val id: Long,
+        override val tabId: Long,
+        override val origin: String,
+        /** The one app that handles the link; null = not known / several (the dialog says "app"). */
+        val appLabel: String?,
+        /** Several apps handle the link (no default): their names, shown under the title. */
+        val choices: List<String>,
+        /** What the link points to, shown small (own schemes only). */
+        val target: String?,
+        val open: () -> Unit,
+        val stay: () -> Unit,
+        /** The tab is closing or going to sleep: just drop the question (no fallback load into a dying WebView). */
+        val dismiss: () -> Unit,
+    ) : PageDialog {
+        override fun cancel() = dismiss()
+    }
 }
