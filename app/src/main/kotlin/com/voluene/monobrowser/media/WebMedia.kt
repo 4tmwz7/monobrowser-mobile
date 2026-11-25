@@ -117,7 +117,7 @@ class WebMediaHub(private val context: android.content.Context) {
                 });
               } catch (e) {}
               var handlers = {}, last = null, ticker = 0, pending = 0;
-              var TYPES = ['play', 'playing', 'pause', 'ended', 'emptied', 'seeked', 'ratechange', 'durationchange', 'loadedmetadata', 'resize'];
+              var TYPES = ['play', 'playing', 'pause', 'ended', 'emptied', 'seeked', 'ratechange', 'durationchange', 'loadedmetadata', 'resize', 'volumechange'];
               var ms = navigator.mediaSession;
               if (ms && ms.setActionHandler) {
                 var original = ms.setActionHandler.bind(ms);
@@ -189,11 +189,18 @@ class WebMediaHub(private val context: android.content.Context) {
               function track(el) {
                 if (!el || el.__monoTracked) return;
                 el.__monoTracked = true;
-                TYPES.forEach(function (type) { el.addEventListener(type, function () { if (type === 'play' || type === 'playing') last = el; soon(); }); });
+                TYPES.forEach(function (type) { el.addEventListener(type, function () { if ((type === 'play' || type === 'playing') && counts(el)) last = el; soon(); }); });
                 if (!el.isConnected) {
                   detached.push(el);
                   if (detached.length > 32) detached.shift();
                 }
+              }
+              // Muted autoplay (background loops, ads, banners, feed previews) is decoration, not something the user
+              // plays: no notification, no picture in picture. A video that was heard once still counts when muted later.
+              function audible(el) { return !el.muted && el.volume > 0; }
+              function counts(el) {
+                if (!el.paused && !el.ended && audible(el)) el.__monoHeard = true;
+                return audible(el) || !!el.__monoHeard;
               }
               function allMedia() {
                 var list = Array.prototype.slice.call(document.querySelectorAll('video,audio'));
@@ -205,7 +212,7 @@ class WebMediaHub(private val context: android.content.Context) {
                 var origPlay = HTMLMediaElement.prototype.play;
                 HTMLMediaElement.prototype.play = function () {
                   track(this);
-                  last = this;
+                  if (counts(this)) last = this;
                   var result = origPlay.apply(this, arguments);
                   soon();
                   return result;
@@ -232,8 +239,10 @@ class WebMediaHub(private val context: android.content.Context) {
                 pending = 0;
                 var media = allMedia(), playing = false;
                 for (var i = 0; i < media.length; i++) {
-                  if (!media[i].paused && !media[i].ended) { playing = true; last = media[i]; break; }
+                  if (!media[i].paused && !media[i].ended && counts(media[i])) { playing = true; last = media[i]; break; }
                 }
+                // The last element seen was only decoration: it gives no position, length or video size.
+                if (last && !counts(last)) last = null;
                 // Players without a media element (Web Audio) count when they declare it through the Media Session.
                 if (!playing && ms && ms.metadata && ms.playbackState === 'playing') playing = true;
                 var md = ms && ms.metadata, yt = youtubeData();
@@ -254,7 +263,7 @@ class WebMediaHub(private val context: android.content.Context) {
                 document.addEventListener(type, function (e) {
                   var t = e.target;
                   if (t && (t.tagName === 'VIDEO' || t.tagName === 'AUDIO')) {
-                    if (type === 'play' || type === 'playing') last = t;
+                    if ((type === 'play' || type === 'playing') && counts(t)) last = t;
                     soon();
                   }
                 }, true);
@@ -293,7 +302,7 @@ class WebMediaHub(private val context: android.content.Context) {
                 var video = null, media = allMedia();
                 for (var k = 0; k < media.length; k++) {
                   var m = media[k];
-                  if (m.tagName === 'VIDEO' && m.isConnected && !m.paused && !m.ended) { video = m; break; }
+                  if (m.tagName === 'VIDEO' && m.isConnected && !m.paused && !m.ended && counts(m)) { video = m; break; }
                 }
                 if (!video && last && last.tagName === 'VIDEO' && last.isConnected) video = last;
                 if (!video) return;
