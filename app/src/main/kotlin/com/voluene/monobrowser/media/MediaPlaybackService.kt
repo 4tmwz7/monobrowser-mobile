@@ -115,7 +115,10 @@ abstract class MediaPlaybackService : Service() {
 
     private fun render(info: MediaInfo?, force: Boolean = false) {
         if (info == null) {
-            if (force && !foreground) startForegroundCompat(notification(MediaInfo("", "", false))) // required once
+            // Started but nothing plays any more (the page stopped or navigated away meanwhile): Android still wants
+            // a notification once. A plain one, not a media one: system media controls (HyperOS / One UI lock screen,
+            // quick settings) would otherwise keep an empty player card with only the channel name.
+            if (force && !foreground) startForegroundCompat(placeholder())
             session.isActive = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -154,6 +157,13 @@ abstract class MediaPlaybackService : Service() {
             foreground = true
         }
     }
+
+    private fun placeholder(): Notification = Notification.Builder(this, channelId)
+        .setSmallIcon(smallIcon)
+        .setContentTitle(getString(channelName))
+        .setCategory(Notification.CATEGORY_SERVICE)
+        .setOnlyAlertOnce(true)
+        .build()
 
     private fun notification(info: MediaInfo): Notification {
         fun action(icon: Int, label: Int, action: String) =
